@@ -1,0 +1,47 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { Navigation } from '@/components/layout/Navigation';
+import { Footer } from '@/components/layout/Footer';
+import { CustomCursor } from '@/components/ui/CustomCursor';
+import { NoiseOverlay } from '@/components/ui/NoiseOverlay';
+
+interface Props {
+  frontmatter: {
+    title: string;
+    publishDate?: Date;
+    seriesId?: string;
+  }
+}
+
+const { frontmatter } = Astro.props;
+---
+
+<BaseLayout title={`${frontmatter.title} | Pin-Han Tseng`}>
+  <CustomCursor client:media="(pointer: fine) and (hover: hover) and (min-width: 1024px)" />
+  <NoiseOverlay />
+  <Navigation client:idle />
+
+  <article class="w-full max-w-3xl mx-auto px-6 pt-48 pb-24">
+    <header class="mb-16 border-b border-white/[0.05] pb-12">
+      {frontmatter.seriesId && (
+        <a href={`/series/${frontmatter.seriesId}`} class="inline-block text-[10px] tracking-[0.25em] text-[#555555] uppercase mb-5 hover:text-white transition-colors">
+          ← Series / {frontmatter.seriesId}
+        </a>
+      )}
+      <h1 class="text-3xl md:text-4xl font-bold tracking-tighter text-white leading-tight mb-5">
+        {frontmatter.title}
+      </h1>
+      {frontmatter.publishDate && (
+        <time class="text-sm font-light tracking-wide text-[#86868B]">
+          {new Date(frontmatter.publishDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </time>
+      )}
+    </header>
+    
+    <div class="prose prose-invert prose-p:text-[#A1A1AA] prose-p:leading-[1.9] prose-p:font-light prose-headings:text-[#F5F5F7] prose-headings:font-medium prose-headings:tracking-tight prose-a:text-white hover:prose-a:text-white/80 prose-blockquote:border-white/[0.1] prose-blockquote:text-[#86868B] prose-strong:text-white prose-strong:font-medium max-w-none">
+      <slot />
+    </div>
+  </article>
+
+  <Footer />
+</BaseLayout>

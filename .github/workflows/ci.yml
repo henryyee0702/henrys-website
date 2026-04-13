@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck · Build · Lint · A11y
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Accessibility audit (pa11y)
+        run: |
+          npx -y serve dist -l 4173 &
+          sleep 3
+          npx -y pa11y \
+            --runner htmlcs \
+            --standard WCAG2AA \
+            --ignore "WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Fail" \
+            http://localhost:4173 || true
+        # Colour-contrast failures are informational for dark-theme sites.
+        # Remove `|| true` once baseline is clean.

@@ -1,0 +1,329 @@
+import React, { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { motion, AnimatePresence } from 'framer-motion';
+import { IdleTracker, shouldThrottleFrame } from '@/lib/adaptive-render';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { Trophy } from 'lucide-react';
+
+interface ThermodynamicExhibitProps {
+  title: string;
+  description: string;
+  award?: string;
+  youngImageSrc: string;
+  oldImageSrc: string;
+}
+
+export const ThermodynamicExhibit: React.FC<ThermodynamicExhibitProps> = ({
+  title,
+  description,
+  award,
+  youngImageSrc,
+  oldImageSrc
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const isVisibleRef = useRef(false);
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+
+  useEffect(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+    let isDisposed = false;
+    let reqId: number;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      isVisibleRef.current = entry.isIntersecting;
+    });
+    observer.observe(containerRef.current);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+    camera.position.z = 1;
+
+    const renderer = new THREE.WebGLRenderer({ 
+      canvas: canvasRef.current, 
+      alpha: false, 
+      antialias: false, 
+      powerPreference: "high-performance" 
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+
+    let tOld: THREE.Texture, tYoung: THREE.Texture, material: THREE.ShaderMaterial, geometry: THREE.PlaneGeometry;
+    const targetMouse = new THREE.Vector2(0.5, 0.5);
+    const currentMouse = new THREE.Vector2(0.5, 0.5);
+    const lastMouse = new THREE.Vector2(0.5, 0.5);
+    let currentVelocity = 0;
+    const idleTracker = new IdleTracker();
+    let frameCount = 0;
+
+    const init = async () => {
+      try {
+        const tl = new THREE.TextureLoader();
+        tl.setCrossOrigin('anonymous');
+        
+        const loadT = (url: string): Promise<THREE.Texture> => new Promise((res, rej) => tl.load(url, res, undefined, rej));
+        
+        [tOld, tYoung] = await Promise.all([
+          loadT(oldImageSrc),
+          loadT(youngImageSrc)
+        ]);
+
+        if (isDisposed) {
+          tOld.dispose();
+          tYoung.dispose();
+          return;
+        }
+        
+        tOld.minFilter = THREE.LinearFilter; 
+        tYoung.minFilter = THREE.LinearFilter;
+        tOld.generateMipmaps = false; 
+        tYoung.generateMipmaps = false;
+
+        geometry = new THREE.PlaneGeometry(2, 2);
+        
+        material = new THREE.ShaderMaterial({
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tOld;
+            uniform sampler2D tYoung;
+            uniform vec2 uResolution;
+            uniform vec2 uImageRes;
+            uniform vec2 uMouse;
+            uniform float uTime;
+            uniform float uVelocity;
+            varying vec2 vUv;
+
+            vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+            float snoise(vec3 v){ 
+              const vec2 C = vec2(1.0/6.0, 1.0/3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+              vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+              vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g;
+              vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+              vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + 2.0 * C.xxx; vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;
+              i = mod(i, 289.0);
+              vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+              
+              vec3 ns = (1.0/7.0) * D.wyz - D.xzx;
+              vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+              vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+              vec4 x = x_ * ns.x + ns.yyyy; vec4 y = y_ * ns.x + ns.yyyy;
+              vec4 h = 1.0 - abs(x) - abs(y); vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+              vec4 s0 = floor(b0)*2.0 + 1.0; vec4 s1 = floor(b1)*2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+              vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+              vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+              vec4 norm = 1.79284291400159 - 0.85373472095314 * vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3));
+              p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+              vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+              m = m * m; return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+            }
+
+            void main() {
+              vec2 aspect = vec2(uResolution.x / uResolution.y, 1.0);
+              float imageAspect = uImageRes.x / uImageRes.y;
+              vec2 texUv = vUv;
+
+              if (uResolution.x / uResolution.y > imageAspect) {
+                float scale = imageAspect / (uResolution.x / uResolution.y);
+                texUv.y = (texUv.y - 0.5) * scale + 0.5;
+              } else {
+                float scale = (uResolution.x / uResolution.y) / imageAspect;
+                texUv.x = (texUv.x - 0.5) * scale + 0.5;
+              }
+
+              vec2 aspectUv = vUv * aspect;
+              vec2 aspectMouse = uMouse * aspect;
+              float dist = distance(aspectUv, aspectMouse);
+
+              float noise1 = snoise(vec3(aspectUv * 3.0, uTime * 0.3));
+              float noise2 = snoise(vec3(aspectUv * 6.0, uTime * 0.5 - 100.0));
+
+              float dynamicRadius = 0.18 + (uVelocity * 0.3) + sin(uTime * 1.5) * 0.02;
+              float mask = smoothstep(dynamicRadius + 0.3, dynamicRadius - 0.1, dist);
+              mask += (noise1 * 0.25) * mask; 
+              mask += (noise2 * 0.1) * mask;
+              mask = clamp(mask, 0.0, 1.0);
+
+              vec2 fluidUv = texUv + vec2(noise1, noise2) * mask * 0.05;
+              float caOffset = (smoothstep(0.0, 0.4, mask) - smoothstep(0.6, 1.0, mask)) * 0.015;
+              
+              vec4 cY;
+              cY.r = texture2D(tYoung, clamp(fluidUv + vec2(caOffset, 0.0), 0.0, 1.0)).r;
+              cY.g = texture2D(tYoung, clamp(fluidUv, 0.0, 1.0)).g;
+              cY.b = texture2D(tYoung, clamp(fluidUv - vec2(caOffset, 0.0), 0.0, 1.0)).b;
+              cY.a = 1.0;
+              
+              vec4 cO = texture2D(tOld, clamp(texUv - (normalize(aspectUv - aspectMouse) * mask * 0.02), 0.0, 1.0));
+              
+              vec3 glow = vec3(1.0, 0.3, 0.05) * (smoothstep(0.2, 0.5, mask) - smoothstep(0.5, 0.8, mask)) * 1.2;
+              vec3 fC = mix(cO.rgb, cY.rgb, smoothstep(0.4, 0.6, mask)) + glow;
+              
+              float v = smoothstep(0.8, 0.2, length(vUv - 0.5));
+              gl_FragColor = vec4(mix(fC * 0.4, fC, v) + (fract(sin(dot(vUv, vec2(12.9898, 78.233)) + uTime) * 43758.5453) - 0.5) * 0.06, 1.0);
+            }
+          `,
+          uniforms: {
+            tOld: { value: tOld },
+            tYoung: { value: tYoung },
+            uResolution: { value: new THREE.Vector2() },
+            uImageRes: { value: new THREE.Vector2(tOld.image.width, tOld.image.height) },
+            uMouse: { value: currentMouse },
+            uTime: { value: 0 },
+            uVelocity: { value: 0 }
+          },
+          depthWrite: false,
+          depthTest: false
+        });
+
+        scene.add(new THREE.Mesh(geometry, material));
+
+        const handleResize = () => {
+          if (!containerRef.current) return;
+          const w = containerRef.current.clientWidth;
+          const h = containerRef.current.clientHeight;
+          renderer.setSize(w, h);
+          material.uniforms.uResolution.value.set(w, h);
+        };
+        handleResize();
+        const container = containerRef.current;
+        if (!container) return;
+        const ro = new ResizeObserver(handleResize);
+        ro.observe(container);
+
+        const handleMouseMove = (e: MouseEvent) => {
+          const rect = container.getBoundingClientRect();
+          targetMouse.x = (e.clientX - rect.left) / rect.width;
+          targetMouse.y = 1.0 - ((e.clientY - rect.top) / rect.height);
+          idleTracker.ping();
+        };
+        container.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+        setIsLoading(false);
+
+        // Reduced-motion: render one blended frame, skip RAF loop
+        if (reducedMotion) {
+          material.uniforms.uMouse.value.set(0.5, 0.5);
+          material.uniforms.uTime.value = 0;
+          material.uniforms.uVelocity.value = 0;
+          renderer.render(scene, camera);
+          return () => {
+            ro.disconnect();
+          };
+        }
+
+        const clock = new THREE.Clock();
+        const renderLoop = () => {
+          if (isDisposed) return;
+          reqId = requestAnimationFrame(renderLoop);
+          if (!isVisibleRef.current || shouldThrottleFrame(frameCount++, idleTracker.idle)) return;
+
+          currentMouse.lerp(targetMouse, 0.08);
+          const dist = currentMouse.distanceTo(lastMouse);
+          currentVelocity += (dist - currentVelocity) * 0.1;
+          lastMouse.copy(currentMouse);
+
+          material.uniforms.uTime.value = clock.getElapsedTime();
+          material.uniforms.uMouse.value.copy(currentMouse);
+          material.uniforms.uVelocity.value = currentVelocity;
+          renderer.render(scene, camera);
+        };
+        reqId = requestAnimationFrame(renderLoop);
+
+        return () => {
+          ro.disconnect();
+          container.removeEventListener('mousemove', handleMouseMove);
+        };
+      } catch (err) {
+        console.error("Renderer Init Error:", err);
+        if (tOld) tOld.dispose();
+        if (tYoung) tYoung.dispose();
+        if (!isDisposed) {
+          setHasError(true);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    const cleanupPromise = init();
+    return () => {
+      isDisposed = true;
+      observer.disconnect();
+      if (reqId) cancelAnimationFrame(reqId);
+      if (tOld) tOld.dispose();
+      if (tYoung) tYoung.dispose();
+      if (geometry) geometry.dispose();
+      if (material) material.dispose();
+      renderer.dispose();
+      cleanupPromise.then(cleanup => cleanup && cleanup());
+    };
+  }, [youngImageSrc, oldImageSrc, reducedMotion]);
+
+  return (
+    <div className="relative w-full h-[80vh] md:h-screen bg-[#050505] overflow-hidden flex items-center justify-center">
+      <div 
+        ref={containerRef} 
+        className="relative w-full h-full cursor-crosshair group"
+      >
+        <canvas 
+          ref={canvasRef} 
+          className="absolute inset-0 w-full h-full block z-0" 
+          style={{ opacity: isLoading || hasError ? 0 : 1, transition: 'opacity 1.5s ease' }} 
+        />
+
+        <AnimatePresence>
+          {(isLoading || hasError) && (
+            <motion.div 
+              initial={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#050505]"
+            >
+              {hasError ? (
+                <div className="text-center text-[#A1A1AA]">
+                  <p className="tracking-[0.1em] text-sm uppercase">無法加載熱力影像</p>
+                  <p className="text-xs text-[#555555] mt-2">請確保您的瀏覽器支援 WebGL 並刷新頁面。</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-10 h-10 rounded-full border border-white/[0.1] border-t-white/[0.8] animate-spin" />
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-[#86868B]">正在建構記憶場景...</span>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-t from-[#050505]/90 via-[#050505]/20 to-transparent" />
+        <div className="absolute inset-0 z-30 flex flex-col justify-end p-8 md:p-20 pointer-events-none">
+          <motion.div 
+            initial={{ y: 30, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="max-w-3xl"
+          >
+            {award && (
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD60A]/20 bg-[#FFD60A]/10 backdrop-blur-md px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-[#FFD60A] mb-6 shadow-lg w-fit">
+                <Trophy size={12} /> {award}
+              </div>
+            )}
+            <h3 className="text-5xl md:text-7xl font-bold tracking-tighter text-[#F5F5F7] leading-none mb-6">{title}</h3>
+            <p className="text-[#A1A1AA] text-lg md:text-xl leading-relaxed font-light max-w-xl">
+              {description}
+            </p>
+            <div className="mt-8">
+              <a href="/works/the-melting-time" className="pointer-events-auto inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-sm tracking-widest uppercase transition-colors">
+                View Project
+              </a>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+};

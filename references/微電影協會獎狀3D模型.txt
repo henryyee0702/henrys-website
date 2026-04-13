@@ -1,0 +1,379 @@
+import React, { useRef, useEffect, useState } from 'react';
+import * as THREE from 'three';
+
+export default function App() {
+  const mountRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+
+    // --- 1. 基本場景設置 ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#050505');
+
+    const camera = new THREE.PerspectiveCamera(45, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
+    camera.position.z = 5.2;
+
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance" 
+    });
+    renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // 曝光度調回 1.0，確保高光區有足夠的動態範圍不被裁切 (Clip)
+    renderer.toneMappingExposure = 1.0;
+    
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+    currentMount.appendChild(renderer.domElement);
+
+    // --- 2. 光源設置 (柔化防過曝系統) ---
+    // 環境底光：保持 0.6 確保暗部有足夠亮度
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
+    // 主光源：純白光，亮度 0.7，還原紙張原始色準
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    mainLight.position.set(3, 2, 4); 
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048; 
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.bias = -0.0005;
+    mainLight.shadow.radius = 32; 
+    scene.add(mainLight);
+
+    // 燙金環境高光：大幅降低亮度，提供基本金屬折射即可
+    const foilHighlight1 = new THREE.DirectionalLight(0xfff0dd, 0.4);
+    foilHighlight1.position.set(2.5, 3.0, 4.0); 
+    scene.add(foilHighlight1);
+
+    const foilHighlight2 = new THREE.DirectionalLight(0xeef5ff, 0.2);
+    foilHighlight2.position.set(-2.0, -2.0, 3.5);
+    scene.add(foilHighlight2);
+
+    // 游標追蹤點光源：【關鍵降躁】亮度降至 1.2，距離拉遠至 3.5，讓光暈變大變柔和
+    // 顏色改為極其輕微的暖白色，避免死白光吃掉原圖色彩
+    const foilLight = new THREE.PointLight(0xfff8ee, 1.2, 20);
+    foilLight.position.set(0, 0, 3.5); 
+    scene.add(foilLight);
+
+    // --- 3. 建立獎狀幾何體 ---
+    const macroGroup = new THREE.Group(); 
+    const microGroup = new THREE.Group(); 
+    
+    macroGroup.add(microGroup);
+    scene.add(macroGroup);
+
+    const geometry = new THREE.BoxGeometry(1.96, 2.8, 0.025);
+    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    
+    let certificateMesh;
+    let frontMat, backMat, loadedFrontTex, loadedBackTex;
+
+    // --- 4. 載入正反面貼圖 ---
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+
+    const frontTextureUrl = 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775610744/Screenshot_2026-04-08_at_9.11.41_AM_y7e2pj.png';
+    const backTextureUrl = 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775813157/1e14ff7bc43648f3883fef68fa41d48f_kotbrq.jpg'; 
+
+    Promise.all([
+      new Promise((resolve, reject) => loader.load(frontTextureUrl, resolve, undefined, reject)),
+      new Promise((resolve, reject) => loader.load(backTextureUrl, resolve, undefined, reject))
+    ]).then(([frontTexture, backTexture]) => {
+      
+      loadedFrontTex = frontTexture;
+      loadedBackTex = backTexture;
+
+      frontTexture.colorSpace = THREE.SRGBColorSpace;
+      frontTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      
+      backTexture.colorSpace = THREE.SRGBColorSpace;
+      backTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      backTexture.repeat.set(4, 4);
+      backTexture.offset.set(-1.5, -1.5);
+      backTexture.wrapS = THREE.ClampToEdgeWrapping;
+      backTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+      // --- 4a. 正面材質 (防溢光柔和版) ---
+      frontMat = new THREE.MeshStandardMaterial({ 
+        map: frontTexture, 
+        roughness: 0.85,             
+        metalness: 0.1,             
+        emissive: 0xffffff,          
+        emissiveMap: frontTexture,        
+        // 維持微弱自發光，確保白紙清脆度
+        emissiveIntensity: 0.12 
+      });
+
+      frontMat.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            `
+            float roughnessFactor = roughness;
+            #ifdef USE_MAP
+              float isRedFront = smoothstep(0.15, 0.25, diffuseColor.r - diffuseColor.g) * smoothstep(0.15, 0.25, diffuseColor.r - diffuseColor.b);
+              float isGoldFront = smoothstep(0.1, 0.25, diffuseColor.r - diffuseColor.b) * smoothstep(0.05, 0.2, diffuseColor.g - diffuseColor.b) * (1.0 - isRedFront);
+              float lumFront = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+              float isDarkFront = smoothstep(0.6, 0.3, lumFront) * (1.0 - isRedFront) * (1.0 - isGoldFront);
+              float isPaperFront = 1.0 - clamp(isRedFront + isGoldFront + isDarkFront, 0.0, 1.0);
+
+              // 🚫 完全保留原圖色彩，不覆寫 diffuseColor
+              // 【抗過曝關鍵】適度提高粗糙度，讓反光變得更像高級絲綢般暈開，而不是刺眼的鏡子
+              // 白紙(0.98) | 印章(0.3) | 金色邊框(0.35) | 黑色文字(0.4)
+              roughnessFactor = 0.98 * isPaperFront + 0.3 * isRedFront + 0.35 * isGoldFront + 0.4 * isDarkFront;
+            #endif
+            `
+          );
+  
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <metalnessmap_fragment>',
+            `
+            float metalnessFactor = metalness;
+            #ifdef USE_MAP
+              float isRedFrontM = smoothstep(0.15, 0.25, diffuseColor.r - diffuseColor.g) * smoothstep(0.15, 0.25, diffuseColor.r - diffuseColor.b);
+              float isGoldFrontM = smoothstep(0.1, 0.25, diffuseColor.r - diffuseColor.b) * smoothstep(0.05, 0.2, diffuseColor.g - diffuseColor.b) * (1.0 - isRedFrontM);
+              float lumFrontM = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+              float isDarkFrontM = smoothstep(0.6, 0.3, lumFrontM) * (1.0 - isRedFrontM) * (1.0 - isGoldFrontM);
+              float isPaperFrontM = 1.0 - clamp(isRedFrontM + isGoldFrontM + isDarkFrontM, 0.0, 1.0);
+
+              // 【抗過曝關鍵】稍微下調金屬度，讓材質在強光下仍能保留原本的顏色
+              // 印章(0.65) | 金邊(0.7) | 黑色文字(0.5)
+              metalnessFactor = 0.0 * isPaperFrontM + 0.65 * isRedFrontM + 0.7 * isGoldFrontM + 0.5 * isDarkFrontM;
+            #endif
+            `
+          );
+      };
+
+      // --- 4b. 背面材質 ---
+      backMat = new THREE.MeshStandardMaterial({
+          map: backTexture,
+          roughness: 0.5, 
+          metalness: 0.5,
+          emissive: 0xffffff,
+          emissiveMap: backTexture,
+          emissiveIntensity: 0.12 
+      });
+
+      backMat.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            `
+            float isRed = step(diffuseColor.g + 0.15, diffuseColor.r) * step(diffuseColor.b + 0.15, diffuseColor.r);
+            float lumBack = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+            float isBlack = (1.0 - isRed) * step(lumBack, 0.6);
+            float isPaper = (1.0 - isRed) * step(0.6, lumBack);
+
+            vec3 redFoil = vec3(0.88, 0.12, 0.18);
+            vec3 blackFoil = vec3(0.20, 0.20, 0.20); 
+            vec3 pearlYellow = vec3(1.0, 0.965, 0.875); 
+            vec3 paperColor = diffuseColor.rgb * pearlYellow;
+
+            diffuseColor.rgb = paperColor * isPaper + redFoil * isRed + blackFoil * isBlack;
+
+            float roughnessFactor = roughness;
+            // 背面粗糙度同樣適度提升防死白
+            roughnessFactor = 0.35 * isPaper + 0.25 * isRed + 0.25 * isBlack; 
+            `
+          );
+  
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <metalnessmap_fragment>',
+            `
+            float metalnessFactor = metalness;
+            float isRedM = step(diffuseColor.g + 0.15, diffuseColor.r) * step(diffuseColor.b + 0.15, diffuseColor.r);
+            float lumBackM = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+            float isBlackM = (1.0 - isRedM) * step(lumBackM, 0.6);
+            float isPaperM = (1.0 - isRedM) * step(0.6, lumBackM);
+            
+            // 背面金屬度下調保留色彩
+            metalnessFactor = 0.12 * isPaperM + 0.75 * isRedM + 0.8 * isBlackM;
+            `
+          );
+      };
+
+      const materials = [
+        darkMaterial, darkMaterial, darkMaterial, darkMaterial, 
+        frontMat, backMat
+      ];
+
+      certificateMesh = new THREE.Mesh(geometry, materials);
+      certificateMesh.castShadow = true;
+      certificateMesh.receiveShadow = true;
+      
+      microGroup.add(certificateMesh);
+
+      macroGroup.rotation.x = 0.05;
+      macroGroup.rotation.y = -0.15; 
+
+      setIsLoading(false);
+
+    }).catch((err) => {
+      console.error("貼圖載入失敗:", err);
+      setIsLoading(false);
+    });
+
+    // --- 5. 地板陰影 ---
+    const planeGeo = new THREE.PlaneGeometry(20, 20);
+    const planeMat = new THREE.ShadowMaterial({ opacity: 0.5 }); 
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -2; 
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // --- 6. 互動與動畫邏輯 ---
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    
+    let targetMacroRotation = { x: 0.05, y: -0.15 }; 
+    let currentMacroRotation = { x: 0.05, y: -0.15 }; 
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    const onPointerDown = (e) => {
+      isDragging = true;
+      previousMousePosition = { x: e.clientX, y: e.clientY };
+    };
+
+    const onPointerMove = (e) => {
+      const rect = currentMount.getBoundingClientRect();
+      mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      if (isDragging) {
+        const deltaMove = {
+          x: e.clientX - previousMousePosition.x,
+          y: e.clientY - previousMousePosition.y
+        };
+
+        targetMacroRotation.y += deltaMove.x * 0.012; 
+        targetMacroRotation.x += deltaMove.y * 0.012;
+        targetMacroRotation.x = Math.max(-0.5, Math.min(0.5, targetMacroRotation.x));
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      }
+    };
+
+    const onPointerUp = () => {
+      isDragging = false;
+    };
+
+    const onResize = () => {
+      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    };
+
+    window.addEventListener('resize', onResize, { passive: true });
+    currentMount.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+
+    // --- 動畫迴圈 ---
+    const clock = new THREE.Clock();
+    let animationFrameId;
+
+    const animate = () => {
+      animationFrameId = requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      currentMacroRotation.x += (targetMacroRotation.x - currentMacroRotation.x) * 0.1;
+      currentMacroRotation.y += (targetMacroRotation.y - currentMacroRotation.y) * 0.1;
+      macroGroup.rotation.x = currentMacroRotation.x;
+      macroGroup.rotation.y = currentMacroRotation.y;
+
+      const targetMicroX = mouseY * 0.15; 
+      const targetMicroY = mouseX * 0.15; 
+      
+      microGroup.rotation.x += (targetMicroX - microGroup.rotation.x) * 0.1;
+      microGroup.rotation.y += (targetMicroY - microGroup.rotation.y) * 0.1;
+      microGroup.position.y = Math.sin(t * 1.5) * 0.05; 
+
+      const baseLightX = Math.sin(t * 1.5) * 1.5;
+      const baseLightY = Math.cos(t * 1.0) * 1.0;
+      
+      const targetLightX = baseLightX + (mouseX * 3.0);
+      const targetLightY = baseLightY + (mouseY * 3.0);
+      
+      foilLight.position.x += (targetLightX - foilLight.position.x) * 0.08;
+      foilLight.position.y += (targetLightY - foilLight.position.y) * 0.08;
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    // --- 7. 清除資源 ---
+    return () => {
+      window.removeEventListener('resize', onResize);
+      currentMount.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      cancelAnimationFrame(animationFrameId);
+      
+      if (currentMount.contains(renderer.domElement)) {
+        currentMount.removeChild(renderer.domElement);
+      }
+      
+      geometry.dispose();
+      darkMaterial.dispose();
+      planeGeo.dispose();
+      planeMat.dispose();
+      if (loadedFrontTex) loadedFrontTex.dispose();
+      if (loadedBackTex) loadedBackTex.dispose();
+      if (frontMat) frontMat.dispose();
+      if (backMat) backMat.dispose();
+      renderer.dispose();
+    };
+  }, []);
+
+  return (
+    <div className="w-full h-screen bg-[#050505] overflow-hidden relative font-sans">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-amber-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+      
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70 tracking-widest text-sm pointer-events-none z-10">
+          <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin mb-4"></div>
+          LOADING ASSETS...
+        </div>
+      )}
+
+      <div 
+        ref={mountRef} 
+        className="w-full h-full cursor-grab active:cursor-grabbing relative z-0" 
+      />
+
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none p-8 flex flex-col justify-between z-10">
+        <header className="flex justify-between items-start">
+          <div className="text-white">
+            <h1 className="text-2xl font-bold tracking-wider mb-1">AWARD CERTIFICATE</h1>
+            <p className="text-white/50 text-sm tracking-widest font-mono uppercase">Youth Micro Movie Festival 2025</p>
+          </div>
+          <div className="hidden md:block text-right text-white/30 text-xs font-mono">
+            <p>ANTI-GLARE FOIL OPTIMIZED</p>
+            <p>DRAG OR MOVE CURSOR</p>
+          </div>
+        </header>
+
+        <footer className="flex justify-between items-end">
+          <p className="text-white/40 text-xs max-w-sm">
+            Perfect color accuracy restored with an anti-glare PBR setup. The hot-stamping foil now disperses light beautifully like premium silk, preventing white blowout even at maximum reflection.
+          </p>
+          <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center animate-pulse">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 9l7 7 7-7"/>
+            </svg>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}

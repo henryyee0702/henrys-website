@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>工程師</title>
+    
+    <!-- ==========================================
+         1. 資源預載與連線優化 (Resource Hints)
+         ========================================== -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    
+    <!-- 預載關鍵字體防 FOUT -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- 預載關鍵腳本，優化載入瀑布流 -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" as="script">
+    
+    <!-- ==========================================
+         2. 外部依賴治理 (Dependency Governance)
+         加上 defer 確保不阻擋渲染，且依序執行。
+         (Production 環境建議補上 integrity="sha256-..." 進行 SRI 驗證)
+         ========================================== -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@studio-freight/lenis@1.0.34/dist/lenis.min.js" crossorigin="anonymous"></script>
+    
+    <style>
+        /* ==========================================
+           3. CSS Variables & Reset
+           ========================================== */
+        :root {
+            --bg-color: #050505;
+            --text-primary: #ffffff;
+            --font-sans: 'Noto Sans TC', sans-serif;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        /* Lenis 防抖動 Boilerplate (防止 Smooth Scroll 與 Pin 產生衝突) */
+        html.lenis, html.lenis body {
+            height: auto;
+        }
+        .lenis.lenis-smooth {
+            scroll-behavior: auto !important;
+        }
+        .lenis.lenis-smooth [data-lenis-prevent] {
+            overscroll-behavior: contain;
+        }
+        .lenis.lenis-stopped {
+            overflow: hidden;
+        }
+        .lenis.lenis-smooth iframe {
+            pointer-events: none; /* 滾動時停用 iframe 互動提升效能 */
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overscroll-behavior-y: none; /* 關閉 Mac/iOS 邊緣回彈效果，確保動畫穩定 */
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* ==========================================
+           4. 核心佈局 (Core Layout)
+           ========================================== */
+        .hero-section {
+            min-height: 100vh;
+            /* 針對行動裝置優化：使用 svh 避免網址列收縮導致佈局跳動 */
+            min-height: 100svh; 
+            background: var(--bg-color);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden; 
+        }
+
+        .hero-content {
+            text-align: center;
+            width: 100%;
+            max-width: 1200px;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ==========================================
+           5. SVG 電氣特效樣式 (Visual FX)
+           ========================================== */
+        .svg-wrapper {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            height: 120px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            will-change: transform;
+            transform: translateZ(0);
+        }
+        @media (min-width: 768px) {
+            .svg-wrapper { height: 250px; }
+        }
+
+        .ambient-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) translateZ(0);
+            width: 70vw;
+            height: 70vw;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(5, 5, 5, 0) 70%);
+            z-index: 1;
+            pointer-events: none;
+            mix-blend-mode: screen;
+            will-change: opacity;
+        }
+
+        svg text {
+            text-rendering: geometricPrecision;
+            transform: translateZ(0);
+            font-size: clamp(60px, 8vw, 120px);
+            font-family: var(--font-sans);
+            font-weight: 900;
+            letter-spacing: 0.15em;
+        }
+
+        .svg-text-base {
+            fill: #02060d; 
+            stroke: rgba(255, 255, 255, 0.02); 
+            stroke-width: 0.5px;
+        }
+        
+        .svg-text-stroke {
+            fill: transparent;
+            stroke: url(#electric-grad);
+            stroke-width: 1.5px; 
+            stroke-dasharray: 4000;
+            stroke-dashoffset: 4000;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            mix-blend-mode: screen;
+            will-change: stroke-dashoffset, opacity;
+        }
+
+        .svg-text-zap {
+            fill: transparent;
+            stroke: #ffffff;
+            stroke-width: 2px;
+            stroke-dasharray: 2 50 6 150 3 80; 
+            stroke-dashoffset: 4000;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0;
+            mix-blend-mode: screen;
+            will-change: stroke-dashoffset, opacity;
+        }
+
+        .svg-text-fill {
+            fill: #ffffff; 
+            text-shadow: 
+                0 0 8px rgba(255, 255, 255, 0.45),
+                0 0 18px rgba(255, 255, 255, 0.3),
+                0 0 30px rgba(255, 255, 255, 0.15);
+            will-change: opacity;
+        }
+
+        /* ==========================================
+           6. 漸進式增強降級策略 (Progressive Enhancement)
+           ========================================== */
+        
+        .ambient-glow, .svg-text-fill { opacity: 1; }
+        .svg-text-stroke, .svg-text-zap { display: none; }
+
+        html[data-gsap-ready="true"] .ambient-glow,
+        html[data-gsap-ready="true"] .svg-text-fill { opacity: 0; }
+        
+        html[data-gsap-ready="true"] .svg-text-stroke,
+        html[data-gsap-ready="true"] .svg-text-zap { display: block; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ambient-glow, .svg-text-fill { opacity: 1 !important; transition: none !important; }
+            .svg-text-stroke, .svg-text-zap { display: none !important; }
+            .svg-wrapper { animation: none !important; transform: scale(1) !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <main id="smooth-wrapper">
+        <div id="smooth-content">
+            
+            <section class="hero-section" id="hero-section">
+                <!-- A11y: 語意結構 -->
+                <h1 class="sr-only">工程師</h1>
+
+                <div class="ambient-glow" id="ambient-glow"></div>
+
+                <div class="hero-content">
+                    <div class="svg-wrapper" id="svg-container">
+                        <!-- A11y: 隱藏純視覺 SVG -->
+                        <svg width="100%" height="100%" viewBox="0 0 800 200" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <filter id="cinematic-glow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur1" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur3" />
+                                    <feComponentTransfer in="blur2" result="blur2_dim"><feFuncA type="linear" slope="0.25" /></feComponentTransfer>
+                                    <feComponentTransfer in="blur3" result="blur3_dim"><feFuncA type="linear" slope="0.1" /></feComponentTransfer>
+                                    <feMerge>
+                                        <feMergeNode in="blur3_dim" />
+                                        <feMergeNode in="blur2_dim" />
+                                        <feMergeNode in="blur1" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+
+                                <linearGradient id="electric-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#333333" />
+                                    <stop offset="25%" stop-color="#ffffff" />
+                                    <stop offset="50%" stop-color="#888888" />
+                                    <stop offset="75%" stop-color="#ffffff" />
+                                    <stop offset="100%" stop-color="#333333" />
+                                </linearGradient>
+                            </defs>
+
+                            <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" class="svg-text-base">工程師</text>
+                            <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" class="svg-text-stroke" filter="url(#cinematic-glow)">工程師</text>
+                            <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" class="svg-text-zap" filter="url(#cinematic-glow)">工程師</text>
+                            <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" class="svg-text-fill">工程師</text>
+                        </svg>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ==========================================
+         7. 應用程式啟動與錯誤邊界 (App Bootstrapper & Error Boundary)
+         ========================================== -->
+    <script>
+        // 核心配置與環境偵測
+        const AppConfig = {
+            hasReducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+            checkDependencies: () => typeof window.gsap !== 'undefined' 
+                                  && typeof window.ScrollTrigger !== 'undefined'
+                                  && typeof window.Lenis !== 'undefined'
+        };
+
+        class SmoothScroll {
+            constructor() {
+                this.lenis = new Lenis({
+                    duration: 1.2,
+                    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+                    direction: 'vertical',
+                    smooth: true,
+                    smoothTouch: false, // 行動裝置採用原生滾動，避免與 Touch Event 衝突造成抖動
+                });
+
+                this.init();
+            }
+
+            init() {
+                this.lenis.on('scroll', ScrollTrigger.update);
+                gsap.ticker.add((time) => this.lenis.raf(time * 1000));
+                gsap.ticker.lagSmoothing(0);
+            }
+        }
+
+        class ElectricTextAnimation {
+            constructor(options) {
+                this.triggerId = options.trigger;
+                this.init();
+            }
+
+            init() {
+                const tl = gsap.timeline({
+                    scrollTrigger: {
+                        trigger: this.triggerId,
+                        start: "top top", 
+                        end: "+=50%",          
+                        pin: true,              
+                        scrub: 1,             
+                        anticipatePin: 1        
+                    }
+                });
+
+                tl.fromTo(`${this.triggerId} .svg-wrapper`, 
+                    { scale: 0.95 }, { scale: 1.05, duration: 5, ease: "none" }, 0
+                );
+                tl.to(`${this.triggerId} .svg-text-zap`, { opacity: 1, duration: 0.25 }, 0.25);
+                tl.to(`${this.triggerId} .svg-text-stroke`, { strokeDashoffset: 0, duration: 3, ease: "power3.inOut" }, 0.5);
+                tl.to(`${this.triggerId} .svg-text-zap`, { strokeDashoffset: -1500, duration: 3, ease: "power3.inOut" }, 0.5);
+                
+                tl.to(`${this.triggerId} .svg-text-zap`, { opacity: 0, duration: 0.4 }, 3.1);
+                tl.to(`${this.triggerId} .svg-text-fill`, { opacity: 1, duration: 0.8, ease: "power2.inOut" }, 3.3);
+                tl.to(`${this.triggerId} .svg-text-stroke`, { opacity: 0, duration: 0.8, ease: "power2.inOut" }, 3.3);
+                tl.to(`${this.triggerId} .ambient-glow`, { opacity: 1, duration: 0.8, ease: "power2.inOut" }, 3.3); 
+            }
+        }
+
+        /**
+         * 系統啟動器 (Bootstrapper)
+         * 負責狀態管理、防呆機制與依賴驗證
+         */
+        function bootstrapApp() {
+            // 防禦 1: 處理瀏覽器重整時的 Scroll 錯位問題
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+
+            // 防禦 2: 使用者偏好檢測
+            if (AppConfig.hasReducedMotion) {
+                console.info("[App] Reduced motion preferred. Bypassing animation enhancements.");
+                return; 
+            }
+
+            // 防禦 3: 外部腳本載入驗證
+            if (!AppConfig.checkDependencies()) {
+                console.warn("[App] Critical dependencies failed to load. Graceful degradation applied.");
+                return;
+            }
+
+            try {
+                // 註冊核心套件
+                gsap.registerPlugin(ScrollTrigger);
+
+                // 防禦 4: 防止行動裝置網址列收合觸發 resize 導致 Pin 跳動
+                ScrollTrigger.config({ ignoreMobileResize: true });
+
+                // 標記應用程式就緒，讓 CSS 隱藏預設靜態文字並啟用特效準備
+                document.documentElement.setAttribute('data-gsap-ready', 'true');
+
+                // 實例化模組
+                new SmoothScroll();
+                new ElectricTextAnimation({ trigger: "#hero-section" });
+
+                // 防禦 5: 確保所有字體與佈局載入完畢後，強制刷新 ScrollTrigger 計算
+                window.addEventListener('load', () => ScrollTrigger.refresh());
+
+            } catch (error) {
+                console.error("[App] Initialization crashed. Reverting to fallback UI.", error);
+                // 發生非預期錯誤，立刻拔除狀態，無縫退回安全降級模式
+                document.documentElement.removeAttribute('data-gsap-ready');
+            }
+        }
+
+        // 使用 DOMContentLoaded 確保 DOM 樹已建立，且 defer 腳本皆已執行完畢
+        document.addEventListener("DOMContentLoaded", bootstrapApp);
+    </script>
+</body>
+</html>

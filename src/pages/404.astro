@@ -1,0 +1,19 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="404 — 找不到頁面">
+  <main class="min-h-screen flex flex-col items-center justify-center px-6 text-center">
+    <p class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-6">404</p>
+    <h1 class="text-4xl md:text-5xl font-bold tracking-tighter text-white mb-4">找不到這個頁面</h1>
+    <p class="text-[#86868B] font-light text-base max-w-md mb-10 leading-relaxed">
+      你要找的頁面可能已被移除、更名，或暫時無法使用。
+    </p>
+    <a
+      href="/"
+      class="inline-block text-sm font-medium text-white border border-white/[0.15] rounded-full px-8 py-3 hover:bg-white/[0.06] transition-colors tracking-wide"
+    >
+      回到首頁
+    </a>
+  </main>
+</BaseLayout>

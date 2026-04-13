@@ -1,0 +1,69 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { Navigation } from '@/components/layout/Navigation';
+import { Footer } from '@/components/layout/Footer';
+import { ThermodynamicExhibit } from '@/components/webgl/ThermodynamicExhibit';
+import { getSeriesPosts } from '@/lib/content';
+
+const posts = await getSeriesPosts('behind-the-work', 'newest');
+---
+
+<BaseLayout title="在作品背後">
+  <Navigation client:idle />
+
+  <main class="w-full">
+
+    <!-- Header -->
+    <header class="max-w-4xl mx-auto px-6 pt-48 pb-16">
+      <p class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-4">Column</p>
+      <h1 class="text-4xl md:text-5xl font-bold tracking-tighter text-white mb-4">在作品背後</h1>
+      <p class="text-lg text-[#86868B] font-light max-w-xl leading-relaxed">Behind the Work — 創作幕後的日常紀錄與思考。</p>
+    </header>
+
+    <!-- Featured Interactive: 鹽埕的冰 -->
+    <section class="w-full mb-24">
+      <ThermodynamicExhibit
+        client:visible
+        title="鹽埕的冰"
+        description="2045年的鹽埕區，阿嬤被一個惡夢嚇得渾身顫抖。兒子在得知消息後，火速前往阿嬤的夢境，卻發現了阿嬤不可告人的祕密..."
+        award="中華民國微電影協會 — 金獎 (AI 生成類)"
+        youngImageSrc="https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_auto/icephotoyoung_thwgtq"
+        oldImageSrc="https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_auto/icephotoold_b7isax"
+      />
+      <div class="max-w-4xl mx-auto px-6 mt-4">
+        <p class="text-xs text-[#555555] tracking-wide">互動式作品展示 — 移動滑鼠探索時間的痕跡</p>
+      </div>
+    </section>
+
+    <!-- Daily Log -->
+    <section class="max-w-3xl mx-auto px-6 pb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Daily Log</h2>
+
+      {posts.length > 0 ? (
+        <div class="flex flex-col">
+          {posts.map((post) => (
+            <a href={`/writing/${post.slug}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-6 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
+              <time class="text-xs text-[#555555] tracking-wide flex-shrink-0 sm:w-28 tabular-nums">
+                {post.data.publishDate.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+              </time>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-base font-medium text-[#E5E5EA] group-hover:text-white transition-colors tracking-tight mb-1">{post.data.title}</h3>
+                {post.data.excerpt && (
+                  <p class="text-sm text-[#86868B] font-light leading-relaxed truncate">{post.data.excerpt}</p>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-20 border border-white/[0.04] rounded-xl">
+          <p class="text-[#555555] font-light text-sm mb-2">尚未有紀錄。</p>
+          <p class="text-[#555555]/60 font-light text-xs">即將開始每日更新。</p>
+        </div>
+      )}
+    </section>
+
+  </main>
+
+  <Footer />
+</BaseLayout>

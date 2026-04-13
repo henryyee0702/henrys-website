@@ -1,0 +1,381 @@
+'use client';
+
+import React, { useState, useEffect, useRef, ReactNode, useMemo } from 'react';
+import { 
+  motion, 
+  useScroll, 
+  useTransform, 
+  useSpring, 
+  useInView, 
+  useMotionValue, 
+  useReducedMotion, 
+  AnimatePresence, 
+  useMotionTemplate
+} from 'framer-motion';
+import { 
+  ArrowUpRight, 
+  Play, 
+  Plus
+} from 'lucide-react';
+
+// ==========================================
+// 1. 嚴格類型與介面
+// ==========================================
+
+export type Lang = 'en' | 'tc';
+
+export interface MotifData {
+  label: string;
+  text: string;
+}
+
+export interface ContentSchema {
+  nav_brand: string;
+  nav_lang_toggle: string;
+  hero_manifesto: string;
+  hero_name: string;
+  hero_positioning: string;
+  hero_desc: string;
+  hero_cta_1: string;
+  hero_cta_2: string;
+  aria_switch_lang: string;
+  footer: string;
+}
+
+// ==========================================
+// 2. 數據與內容
+// ==========================================
+
+const SITE_LINKS = {
+  youtube: "", 
+  email: "mailto:henry930702@gmail.com",
+  linkedin: "https://www.linkedin.com/in/pin-han-tseng/" 
+};
+
+const CONTENT: Record<Lang, ContentSchema> = {
+  en: {
+    nav_brand: "Tseng Pin-Han",
+    nav_lang_toggle: "中文",
+    hero_manifesto: "No one can compete with me on being...",
+    hero_name: "Tseng Pin-Han",
+    hero_positioning: "Engineering discipline meets visual storytelling.",
+    hero_desc: "A living system of technical training and public-facing self-construction.",
+    hero_cta_1: "Watch the Journey",
+    hero_cta_2: "Contact Me",
+    aria_switch_lang: "Switch language to Traditional Chinese",
+    footer: "© 2026 Tseng Pin-Han. A machine for becoming."
+  },
+  tc: {
+    nav_brand: "曾品翰",
+    nav_lang_toggle: "ENG",
+    hero_manifesto: "在成為某個人這件事上，沒有人能與我競爭……",
+    hero_name: "曾品翰",
+    hero_positioning: "工程紀律與視覺敘事彼此成就。",
+    hero_desc: "一個將嚴謹技術訓練與自我建構，公開展示的有機系統。",
+    hero_cta_1: "觀看旅程",
+    hero_cta_2: "與我聯繫",
+    aria_switch_lang: "切換語言至英文",
+    footer: "© 2026 Tseng Pin-Han. A machine for becoming."
+  }
+};
+
+// ==========================================
+// 3. 設備感應與系統 Hook
+// ==========================================
+
+const usePointerType = () => {
+  const [isFine, setIsFine] = useState(false);
+  
+  useEffect(() => {
+    const mql = window.matchMedia('(pointer: fine) and (hover: hover)');
+    setIsFine(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsFine(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  return isFine;
+};
+
+// ==========================================
+// 4. 可複用的動態組件
+// ==========================================
+
+const SceneReveal: React.FC<{children: ReactNode, delay?: number, className?: string}> = ({ children, delay = 0, className = "" }) => {
+  const prefersReduced = useReducedMotion();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: prefersReduced ? 0 : 30, scale: prefersReduced ? 1 : 0.95, filter: prefersReduced ? "none" : "blur(12px)" }}
+      whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      viewport={{ once: true, margin: "-15%" }}
+      transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay }}
+      className={`will-change-[opacity,transform,filter] ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const WeightlessText: React.FC<{children: ReactNode, delay?: number, className?: string}> = ({ children, delay = 0, className = "" }) => {
+  const prefersReduced = useReducedMotion();
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: false, margin: "100px" });
+
+  if (prefersReduced) return <span className={className}>{children}</span>;
+
+  return (
+    <motion.span
+      ref={ref}
+      className={`inline-block ${className}`}
+      animate={inView ? { y: [-2, 2] } : { y: 0 }}
+      transition={{ duration: 6, ease: "easeInOut", repeat: Infinity, repeatType: "mirror", delay: delay }}
+    >
+      {children}
+    </motion.span>
+  );
+};
+
+const AmbientBreathing: React.FC<{children: ReactNode, className?: string, scaleRange?: number[]}> = ({ children, className = "", scaleRange = [0.98, 1.02] }) => {
+  const prefersReduced = useReducedMotion();
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: false, margin: "200px" });
+
+  if (prefersReduced) return <div className={className}>{children}</div>;
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      animate={inView ? { scale: scaleRange, opacity: [0.6, 1] } : { scale: 1, opacity: 0.6 }}
+      transition={{ duration: 12, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" }}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+// ==========================================
+// 5. 全域體驗層與游標
+// ==========================================
+
+const NoiseOverlay: React.FC = () => (
+  <div 
+    className="pointer-events-none fixed inset-0 z-50 opacity-[0.03] mix-blend-overlay"
+    style={{
+      backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+      backgroundRepeat: 'repeat',
+    }}
+    aria-hidden="true"
+  />
+);
+
+const CustomCursor: React.FC = () => {
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const prefersReduced = useReducedMotion();
+  const isPointerFine = usePointerType();
+
+  useEffect(() => {
+    if (prefersReduced || !isPointerFine) return;
+    
+    let rafId: number;
+    const moveCursor = (e: MouseEvent) => {
+      if (cursorRef.current) {
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          if (cursorRef.current) {
+            cursorRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
+          }
+        });
+      }
+    };
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('a') || target.closest('button')) {
+        setIsHovering(true);
+      } else {
+        setIsHovering(false);
+      }
+    };
+
+    window.addEventListener('mousemove', moveCursor);
+    window.addEventListener('mouseover', handleMouseOver);
+
+    return () => {
+      window.removeEventListener('mousemove', moveCursor);
+      window.removeEventListener('mouseover', handleMouseOver);
+      cancelAnimationFrame(rafId);
+    };
+  }, [prefersReduced, isPointerFine]);
+
+  if (prefersReduced || !isPointerFine) return null;
+
+  return (
+    <div 
+      ref={cursorRef}
+      className={`fixed top-0 left-0 w-4 h-4 rounded-full pointer-events-none z-[100] -ml-2 -mt-2 transition-all duration-300 ease-out will-change-transform
+        ${isHovering ? 'scale-[2.5] bg-white mix-blend-difference' : 'scale-100 border border-white/40 bg-white/10 backdrop-blur-[1px]'}
+      `}
+      style={{ backfaceVisibility: 'hidden' }}
+    />
+  );
+};
+
+const MagneticWrapper: React.FC<{ children: ReactNode, className?: string, strength?: number }> = ({ children, className = "", strength = 0.15 }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const prefersReduced = useReducedMotion();
+  const isPointerFine = usePointerType();
+
+  const springX = useSpring(x, { stiffness: 150, damping: 15, mass: 0.1 });
+  const springY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (prefersReduced || !isPointerFine || !ref.current) return;
+    const { clientX, clientY } = e;
+    const { height, width, left, top } = ref.current.getBoundingClientRect();
+    const middleX = clientX - (left + width / 2);
+    const middleY = clientY - (top + height / 2);
+    x.set(middleX * strength);
+    y.set(middleY * strength);
+  };
+
+  const handleMouseLeave = () => { x.set(0); y.set(0); };
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ x: prefersReduced || !isPointerFine ? 0 : springX, y: prefersReduced || !isPointerFine ? 0 : springY }}
+      className={`will-change-transform ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+// ==========================================
+// 6. 英雄視覺序列 (Hero Sequence)
+// ==========================================
+
+const HeroSequence: React.FC<{t: ContentSchema}> = ({ t }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end end"] });
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 70, damping: 25, mass: 1.5, restDelta: 0.001 });
+
+  const manifestoOpacity = useTransform(smoothProgress, [0, 0.08, 0.15], [1, 0.8, 0]);
+  const manifestoScale = useTransform(smoothProgress, [0, 0.15], [1, 1.1]); 
+  const manifestoFilter = useTransform(smoothProgress, [0, 0.05, 0.15], ["blur(0px)", "blur(2px)", "blur(12px)"]);
+
+  const nameOpacity = useTransform(smoothProgress, [0.12, 0.2, 0.8, 0.9], [0, 1, 1, 0]);
+  const nameScale = useTransform(smoothProgress, [0.12, 0.3, 0.8, 0.9], [4, 1, 0.95, 0.85]);
+  const nameFilter = useTransform(smoothProgress, [0.12, 0.2, 0.8, 0.9], ["blur(30px)", "blur(0px)", "blur(0px)", "blur(16px)"]);
+  
+  const nameY = useTransform(smoothProgress, [0, 0.3, 0.4, 0.8, 0.9], ["15vh", "15vh", "-18vh", "-18vh", "-38vh"]);
+  const posOpacity = useTransform(smoothProgress, [0.3, 0.4, 0.8, 0.9], [0, 1, 1, 0]);
+  const posY = useTransform(smoothProgress, [0.3, 0.4, 0.8, 0.9], ["42vh", "12vh", "12vh", "-8vh"]);
+  const ctaOpacity = useTransform(smoothProgress, [0.4, 0.5, 0.8, 0.9], [0, 1, 1, 0]);
+  const ctaY = useTransform(smoothProgress, [0.4, 0.5, 0.8, 0.9], ["52vh", "35vh", "35vh", "15vh"]);
+
+  return (
+    <section ref={containerRef} className="h-[240vh] relative w-full" aria-label="Introduction">
+      <div className="sticky top-0 h-screen w-full overflow-hidden flex justify-center items-center">
+        <AmbientBreathing className="absolute inset-0 pointer-events-none mix-blend-screen" scaleRange={[0.9, 1.1]}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
+        </AmbientBreathing>
+
+        <motion.div style={{ opacity: manifestoOpacity, scale: manifestoScale, filter: manifestoFilter }} className="absolute inset-0 flex justify-center items-center px-6 pointer-events-none z-20">
+          <WeightlessText delay={0.5}>
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-light tracking-tight text-[#E5E5EA] italic max-w-4xl text-center leading-[1.3]">"{t.hero_manifesto}"</h1>
+          </WeightlessText>
+        </motion.div>
+
+        <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none z-20">
+          <motion.div style={{ opacity: nameOpacity, scale: nameScale, filter: nameFilter, y: nameY }} className="absolute flex justify-center items-center w-full">
+            <h2 className="text-[14vw] sm:text-7xl md:text-[8rem] lg:text-[11rem] font-bold tracking-tighter leading-none py-[0.1em] px-4 text-center bg-clip-text text-transparent bg-gradient-to-b from-[#FFFFFF] via-[#E5E5EA] to-[#3A3A3C] w-full select-none">{t.hero_name}</h2>
+          </motion.div>
+
+          <motion.div style={{ opacity: posOpacity, y: posY }} className="absolute flex flex-col items-center text-center px-6 max-w-4xl">
+            <p className="text-2xl md:text-4xl lg:text-5xl text-[#F5F5F7] font-medium tracking-tight mb-6 leading-snug">{t.hero_positioning}</p>
+            <p className="text-base md:text-xl text-[#86868B] font-light leading-relaxed max-w-2xl">{t.hero_desc}</p>
+          </motion.div>
+
+          <motion.div style={{ opacity: ctaOpacity, y: ctaY }} className="absolute flex flex-wrap gap-4 justify-center pointer-events-auto px-6 w-full">
+            {SITE_LINKS.email && (
+              <MagneticWrapper strength={0.2}>
+                <a href={SITE_LINKS.email} className="interactive-node px-8 py-4 bg-[#F5F5F7] text-[#000000] rounded-full font-semibold hover:bg-white hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] w-[240px] md:w-auto focus:outline-none focus:ring-4 focus:ring-white/50">
+                  {t.hero_cta_2} <ArrowUpRight size={18} aria-hidden="true" />
+                </a>
+              </MagneticWrapper>
+            )}
+            {SITE_LINKS.youtube && (
+              <MagneticWrapper strength={0.2}>
+                <a href={SITE_LINKS.youtube} target="_blank" rel="noopener noreferrer" className="interactive-node px-8 py-4 bg-white/[0.03] border border-white/[0.1] text-[#F5F5F7] rounded-full font-medium hover:bg-white/[0.08] hover:border-white/[0.15] transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-xl w-[240px] md:w-auto group focus:outline-none focus:ring-4 focus:ring-white/30">
+                  <Play size={16} className="fill-white/80 group-hover:fill-white transition-colors" aria-hidden="true" /> {t.hero_cta_1}
+                </a>
+              </MagneticWrapper>
+            )}
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 7. 主程式組裝
+// ==========================================
+
+export default function App() {
+  const [lang, setLang] = useState<Lang>('tc'); 
+  const t = useMemo(() => CONTENT[lang], [lang]);
+
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const { scrollYProgress } = useScroll();
+  const prefersReduced = useReducedMotion();
+  const isPointerFine = usePointerType();
+
+  useEffect(() => {
+    if (prefersReduced) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseX.set(e.clientX);
+      mouseY.set(e.clientY);
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [mouseX, mouseY, prefersReduced]);
+
+  const spotlightBackground = useMotionTemplate`radial-gradient(800px circle at ${mouseX}px ${mouseY}px, rgba(255,255,255,0.03), transparent 40%)`;
+
+  return (
+    <div className={`min-h-screen bg-[#0A0A0C] text-[#F5F5F7] font-sans selection:bg-white/20 selection:text-white relative antialiased ${isPointerFine && !prefersReduced ? 'cursor-none' : ''}`}>
+      <CustomCursor />
+      <NoiseOverlay />
+      
+      <motion.div style={{ scaleX: scrollYProgress }} className="fixed top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#F5F5F7]/40 to-[#F5F5F7] origin-left z-[60]" aria-hidden="true" />
+      
+      {!prefersReduced && (
+        <motion.div className="pointer-events-none fixed inset-0 z-30 transition-opacity duration-300 mix-blend-screen" style={{ background: spotlightBackground }} aria-hidden="true" />
+      )}
+
+      <div className="fixed inset-0 pointer-events-none z-0" aria-hidden="true">
+        <div className="absolute inset-0 opacity-[0.25]" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(255,255,255,0.02), transparent 50%), linear-gradient(to right, rgba(255,255,255,0.01) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.01) 1px, transparent 1px)', backgroundSize: 'auto, 64px 64px, 64px 64px' }} />
+      </div>
+      
+      <nav className="fixed top-0 w-full z-50 px-6 md:px-12 py-6 flex justify-between items-center bg-[#0A0A0C]/60 backdrop-blur-xl border-b border-white/[0.05]">
+        <div className="interactive-node font-semibold tracking-tighter text-xl text-[#F5F5F7]">{t.nav_brand}</div>
+        <button onClick={() => setLang(lang === 'en' ? 'tc' : 'en')} className="interactive-node text-[11px] font-medium tracking-[0.2em] uppercase text-[#A1A1AA] hover:text-white transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 rounded-sm px-2 py-1" aria-label={t.aria_switch_lang}>
+          {t.nav_lang_toggle}
+        </button>
+      </nav>
+
+      <main className="relative z-10 pt-16">
+        <HeroSequence t={t} />
+      </main>
+    </div>
+  );
+}

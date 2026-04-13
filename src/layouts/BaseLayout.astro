@@ -1,0 +1,32 @@
+---
+import '@/styles/global.css';
+import Head from '@/components/seo/Head.astro';
+import SiteLoader from '@/components/ui/SiteLoader.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  canonical?: string;
+  ogType?: 'article' | 'website';
+  publishDate?: Date;
+  updatedDate?: Date;
+}
+
+const props = Astro.props;
+---
+
+<html lang="zh-TW" class="dark">
+  <head>
+    <Head {...props} />
+    <slot name="head" />
+  </head>
+  <body class="bg-[#050505] text-[#F5F5F7] selection:bg-white/20 selection:text-white">
+    <SiteLoader />
+    <slot />
+    <script>
+      import { initPerf } from '@/lib/perf';
+      initPerf();
+    </script>
+  </body>
+</html>

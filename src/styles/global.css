@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-white/20 selection:text-white;
+  }
+}
+
+@layer utilities {
+  .interactive-node {
+    /* Used for custom cursor interactions if needed */
+  }
+}

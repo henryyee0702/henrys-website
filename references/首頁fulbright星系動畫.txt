@@ -1,0 +1,305 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// ----------------------------------------------------------------------
+// [MODULE 1: DOMAIN DATA & CONFIGURATION]
+// ----------------------------------------------------------------------
+
+const CONFIG = {
+  LAYOUT: {
+    SYS_MAX_SIZE: 950,
+  }
+};
+
+const PLANETS = [
+  { id: '1', planet: 'Sun', radius: 0, speed: 0, size: 56, color: 'from-yellow-100 via-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.8)' },
+  { id: '2', planet: 'Mercury', radius: 80, speed: 0.005, size: 12, color: 'from-neutral-400 to-neutral-600', glow: 'rgba(163, 163, 163, 0.5)' },
+  { id: '3', planet: 'Venus', radius: 120, speed: 0.0035, size: 16, color: 'from-yellow-500 to-orange-600', glow: 'rgba(234, 179, 8, 0.5)' },
+  { id: '4', planet: 'Earth', radius: 170, speed: 0.0028, size: 18, color: 'from-blue-400 to-emerald-500', glow: 'rgba(59, 130, 246, 0.6)' },
+  { id: '5', planet: 'Mars', radius: 220, speed: 0.0022, size: 14, color: 'from-red-500 to-orange-700', glow: 'rgba(239, 68, 68, 0.5)' },
+  { id: '6', planet: 'Jupiter', radius: 280, speed: 0.0016, size: 32, color: 'from-orange-300 to-amber-700', glow: 'rgba(217, 119, 6, 0.5)' },
+  { id: '7', planet: 'Saturn', radius: 350, speed: 0.001, size: 26, color: 'from-yellow-200 to-yellow-600', glow: 'rgba(234, 179, 8, 0.4)', hasRing: true },
+  { id: '8', planet: 'Uranus', radius: 410, speed: 0.0007, size: 20, color: 'from-cyan-300 to-blue-500', glow: 'rgba(34, 211, 238, 0.5)' },
+  { id: '9', planet: 'Neptune', radius: 470, speed: 0.0005, size: 20, color: 'from-blue-600 to-indigo-800', glow: 'rgba(59, 130, 246, 0.5)' }
+];
+
+
+// ----------------------------------------------------------------------
+// [MODULE 2: SCENE ANIMATOR (Renamed & Refactored)]
+// ----------------------------------------------------------------------
+
+class OrbitAnimator {
+  constructor(nodes) {
+    this.nodes = nodes;
+    this.subscribers = new Map();
+    this.animationState = { nodes: {} };
+    this.isReducedMotion = false; // 紀錄是否啟用減弱動態
+    this.startTime = null; // 新增：紀錄動畫起始時間基準
+
+    const orbitNodeCount = nodes.filter(n => n.radius > 0).length;
+    nodes.forEach((n, index) => {
+      this.animationState.nodes[n.id] = {
+        angle: n.radius === 0 ? 0 : (index * 2 * Math.PI) / (orbitNodeCount || 1)
+      };
+    });
+
+    this.lastTime = performance.now();
+    this.reqId = null;
+    this.loop = this.loop.bind(this);
+  }
+
+  setReducedMotion(value) {
+    this.isReducedMotion = value;
+  }
+
+  subscribeNode(id, callback) {
+    this.subscribers.set(id, callback);
+    return () => this.subscribers.delete(id);
+  }
+
+  start() {
+    if (!this.reqId) this.reqId = requestAnimationFrame(this.loop);
+  }
+
+  stop() {
+    if (this.reqId) {
+      cancelAnimationFrame(this.reqId);
+      this.reqId = null;
+    }
+  }
+
+  loop(timestamp) {
+    if (!this.startTime) this.startTime = timestamp; // 初始化時間基準
+
+    let deltaTime = timestamp - this.lastTime;
+    this.lastTime = timestamp;
+    if (deltaTime > 100) deltaTime = 16.666; 
+    let timeScale = deltaTime / 16.666;
+
+    const elapsedSec = (timestamp - this.startTime) / 1000;
+    let speedMultiplier = 1;
+
+    // 如果使用者偏好減少動態，將軌道運行速度直接降至極微慢
+    if (this.isReducedMotion) {
+      speedMultiplier = 0.02;
+    } else {
+      // 時間分層 (Temporal Staging)
+      const ATTRACT_SPEED = 12;  // 階段 1 (0-2s): 稍快 (吸引視線)
+      const CRUISE_SPEED = 0.4;  // 階段 3 (5s+): 超慢巡航 (背景化)
+
+      if (elapsedSec < 2) {
+        speedMultiplier = ATTRACT_SPEED;
+      } else if (elapsedSec < 5) {
+        // 階段 2 (2-5s): 透過 Cubic Ease-out 平滑減速
+        const progress = (elapsedSec - 2) / 3;
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        speedMultiplier = ATTRACT_SPEED - ((ATTRACT_SPEED - CRUISE_SPEED) * easeOutCubic);
+      } else {
+        speedMultiplier = CRUISE_SPEED;
+      }
+    }
+
+    timeScale *= speedMultiplier;
+
+    this.nodes.forEach(node => {
+      const pNode = this.animationState.nodes[node.id];
+
+      if (node.radius > 0) {
+        pNode.angle += node.speed * timeScale;
+      }
+
+      let x = 0, y = 0;
+      if (node.radius > 0) {
+        x = node.radius * Math.cos(pNode.angle);
+        y = node.radius * Math.sin(pNode.angle);
+      }
+
+      const notify = this.subscribers.get(node.id);
+      if (notify) notify({ x, y });
+    });
+
+    this.reqId = requestAnimationFrame(this.loop);
+  }
+}
+
+
+// ----------------------------------------------------------------------
+// [MODULE 3: CUSTOM HOOKS & COMPONENTS]
+// ----------------------------------------------------------------------
+
+function useWindowContext() {
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setScale(Math.min(1.1, Math.min(w, window.innerHeight) / CONFIG.LAYOUT.SYS_MAX_SIZE));
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return { scale };
+}
+
+function useReducedMotion() {
+  const [reducedMotion, setReducedMotion] = useState(false);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const handler = (e) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+  
+  return reducedMotion;
+}
+
+const GlobalStyles = () => (
+  <style>{`
+    .preserve-3d { transform-style: preserve-3d; }
+    .will-change-transform { will-change: transform; }
+    .bg-noise { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E"); }
+
+    /* 全域防護：強制覆寫所有基礎 CSS 動畫，以配合 Reduced Motion 規範 */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  `}</style>
+);
+
+const Background = () => (
+  <>
+    <GlobalStyles />
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02)_0%,transparent_80%)] pointer-events-none" />
+    <div className="absolute inset-0 bg-noise pointer-events-none mix-blend-color-dodge opacity-60" />
+  </>
+);
+
+const PlanetNode = ({ node, animator, isReducedMotion }) => {
+  const rootRef = useRef(null);
+  const isCenterStar = node.radius === 0;
+
+  useEffect(() => {
+    if (!animator) return;
+    const unsubscribe = animator.subscribeNode(node.id, ({ x, y }) => {
+      if (rootRef.current) {
+        rootRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) rotateX(-75deg)`;
+      }
+    });
+    return unsubscribe;
+  }, [animator, node.id]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={`absolute top-0 left-0 preserve-3d pointer-events-none
+        ${!isCenterStar ? 'will-change-transform' : ''}
+      `}
+    >
+      {isCenterStar && (
+        <>
+          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[160%] rounded-full bg-orange-400/20 blur-[15px] pointer-events-none ${isReducedMotion ? '' : 'animate-pulse'}`} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] rounded-full bg-yellow-300/10 blur-[30px] pointer-events-none" />
+        </>
+      )}
+
+      {node.hasRing && (
+        <div 
+          className="absolute top-1/2 left-1/2 rounded-full border-[1px] border-yellow-200/30"
+          style={{ 
+            width: node.size * 2.8, height: node.size * 2.8,
+            transform: 'translate(-50%, -50%) rotateX(75deg)', 
+            boxShadow: '0 0 15px rgba(234, 179, 8, 0.15) inset, 0 0 15px rgba(234, 179, 8, 0.15)'
+          }} 
+        />
+      )}
+
+      <div 
+        className={`absolute top-1/2 left-1/2 rounded-full bg-gradient-to-br ${node.color}`}
+        style={{
+          width: node.size, height: node.size,
+          transform: 'translate(-50%, -50%)',
+          boxShadow: isCenterStar
+            ? `0 0 40px 10px ${node.glow}, 0 0 80px 30px rgba(249, 115, 22, 0.2), inset 0 0 15px rgba(255,255,255,0.8)`
+            : `0 0 12px 1px ${node.glow}`
+        }}
+      />
+    </div>
+  );
+};
+
+
+// ----------------------------------------------------------------------
+// [MODULE 4: APP ORCHESTRATOR]
+// ----------------------------------------------------------------------
+
+export default function App() {
+  const { scale } = useWindowContext();
+  const isReducedMotion = useReducedMotion();
+  const animatorRef = useRef(null);
+
+  // 初始化 Scene Animator
+  if (!animatorRef.current) {
+    animatorRef.current = new OrbitAnimator(PLANETS);
+  }
+
+  // 同步 Reduced Motion 狀態給 Animator
+  useEffect(() => {
+    animatorRef.current.setReducedMotion(isReducedMotion);
+  }, [isReducedMotion]);
+
+  useEffect(() => {
+    animatorRef.current.start();
+    return () => animatorRef.current.stop();
+  }, []);
+
+  return (
+    <div className="w-full h-screen bg-[#020308] overflow-hidden relative">
+      <Background />
+
+      <main className="absolute inset-0 flex items-center justify-center perspective-[1200px]">
+        <div 
+          className="relative preserve-3d will-change-transform"
+          style={{ 
+            width: 0, height: 0, 
+            transform: `scale(${scale}) rotateX(75deg) translateY(0px)`,
+          }}
+        >
+          <div className="absolute inset-0 preserve-3d will-change-transform">
+            
+            {/* Orbits */}
+            {PLANETS.filter(n => n.radius > 0).map((node) => (
+              <div
+                key={`orbit-${node.id}`}
+                className="absolute top-0 left-0 rounded-full border border-white/10 pointer-events-none"
+                style={{ 
+                  width: node.radius * 2, height: node.radius * 2, 
+                  transform: `translate(-50%, -50%)`
+                }}
+              />
+            ))}
+
+            {/* Planets */}
+            {PLANETS.map((node) => (
+              <PlanetNode
+                key={node.id}
+                node={node}
+                animator={animatorRef.current}
+                isReducedMotion={isReducedMotion}
+              />
+            ))}
+            
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

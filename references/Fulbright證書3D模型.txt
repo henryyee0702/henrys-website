@@ -1,0 +1,340 @@
+import React, { useRef, useEffect, useState } from 'react';
+import * as THREE from 'three';
+
+export default function App() {
+  const mountRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+
+    // --- 1. 基本場景設置 ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#050505');
+
+    const camera = new THREE.PerspectiveCamera(45, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
+    camera.position.z = 4.5;
+
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance" 
+    });
+    renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+    currentMount.appendChild(renderer.domElement);
+
+    // --- 2. 光源設置 (柔化防過曝系統) ---
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    mainLight.position.set(3, 2, 4); 
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048; 
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.bias = -0.0005;
+    mainLight.shadow.radius = 32; 
+    scene.add(mainLight);
+
+    const foilHighlight1 = new THREE.DirectionalLight(0xfff0dd, 0.4);
+    foilHighlight1.position.set(2.5, 3.0, 4.0); 
+    scene.add(foilHighlight1);
+
+    const foilHighlight2 = new THREE.DirectionalLight(0xeef5ff, 0.2);
+    foilHighlight2.position.set(-2.0, -2.0, 3.5);
+    scene.add(foilHighlight2);
+
+    const foilLight = new THREE.PointLight(0xfff8ee, 1.2, 20);
+    foilLight.position.set(0, 0, 3.5); 
+    scene.add(foilLight);
+
+    // --- 3. 建立獎狀幾何體 ---
+    const macroGroup = new THREE.Group(); 
+    const microGroup = new THREE.Group(); 
+    
+    macroGroup.add(microGroup);
+    scene.add(macroGroup);
+
+    const geometry = new THREE.BoxGeometry(2.8, 1.96, 0.025);
+    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    
+    let certificateMesh;
+    let frontMat, backMat, loadedFrontTex;
+
+    // --- 4. 載入正面貼圖 ---
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+
+    // 【錯誤修正】替換為有效且正確的 Fulbright 證書圖片網址
+    const frontTextureUrl = 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775609809/Screenshot_2026-04-08_at_8.56.25_AM_v2skd8.png';
+    
+    loader.load(frontTextureUrl, (texture) => {
+      loadedFrontTex = texture;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+      // --- 4a. 正面材質 (全彩光譜萃取，賦予極致豐富的物理層次) ---
+      frontMat = new THREE.MeshStandardMaterial({ 
+        map: texture, 
+        roughness: 0.85,             
+        metalness: 0.1,             
+        emissive: 0xffffff,          
+        emissiveMap: texture,        
+        emissiveIntensity: 0.12 
+      });
+
+      frontMat.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            `
+            float roughnessFactor = roughness;
+            #ifdef USE_MAP
+              // 1. 光譜特徵精準萃取
+              // 萃取紅色 (外邊框、Maryland Logo 局部)
+              float isRedFront = smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.g) * smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.b);
+              
+              // 萃取藍色 (Fulbright Logo, MEI Logo)
+              float isBlueFront = smoothstep(0.1, 0.2, diffuseColor.b - diffuseColor.r) * smoothstep(0.05, 0.15, diffuseColor.b - diffuseColor.g);
+              
+              // 萃取黃色/金色 (Maryland Logo 局部)
+              float isGoldFront = smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.b) * smoothstep(0.1, 0.2, diffuseColor.g - diffuseColor.b) * (1.0 - isRedFront);
+              
+              // 萃取黑色/深灰色 (文字、簽名)
+              float lumFront = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+              float isDarkFront = smoothstep(0.5, 0.2, lumFront) * (1.0 - isRedFront) * (1.0 - isBlueFront) * (1.0 - isGoldFront);
+              
+              // 【精準鎖定姓名】透過 UV 座標範圍分離 "Pin-Han Tseng"
+              float isNameArea = step(0.44, vMapUv.y) * step(vMapUv.y, 0.55) * step(0.2, vMapUv.x) * step(vMapUv.x, 0.8);
+              float isNameInk = isDarkFront * isNameArea;
+              float isOtherDark = isDarkFront * (1.0 - isNameArea);
+
+              // 其餘為純白紙張
+              float isPaperFront = 1.0 - clamp(isRedFront + isBlueFront + isGoldFront + isDarkFront, 0.0, 1.0);
+
+              // 2. 客製化各區域粗糙度，營造豐富層次
+              // 姓名(0.15): 極致平滑的高級燙金油墨 | 白紙(0.98): 霧面 | 紅色元素(0.3) | 藍色元素(0.35) | 金色元素(0.25) | 一般黑字簽名(0.4)
+              roughnessFactor = 0.98 * isPaperFront + 0.3 * isRedFront + 0.35 * isBlueFront + 0.25 * isGoldFront + 0.15 * isNameInk + 0.4 * isOtherDark;
+            #endif
+            `
+          );
+  
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <metalnessmap_fragment>',
+            `
+            float metalnessFactor = metalness;
+            #ifdef USE_MAP
+              float isRedFrontM = smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.g) * smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.b);
+              float isBlueFrontM = smoothstep(0.1, 0.2, diffuseColor.b - diffuseColor.r) * smoothstep(0.05, 0.15, diffuseColor.b - diffuseColor.g);
+              float isGoldFrontM = smoothstep(0.1, 0.2, diffuseColor.r - diffuseColor.b) * smoothstep(0.1, 0.2, diffuseColor.g - diffuseColor.b) * (1.0 - isRedFrontM);
+              float lumFrontM = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+              float isDarkFrontM = smoothstep(0.5, 0.2, lumFrontM) * (1.0 - isRedFrontM) * (1.0 - isBlueFrontM) * (1.0 - isGoldFrontM);
+              
+              // 【精準鎖定姓名】同步 UV 遮罩
+              float isNameAreaM = step(0.44, vMapUv.y) * step(vMapUv.y, 0.55) * step(0.2, vMapUv.x) * step(vMapUv.x, 0.8);
+              float isNameInkM = isDarkFrontM * isNameAreaM;
+              float isOtherDarkM = isDarkFrontM * (1.0 - isNameAreaM);
+
+              float isPaperFrontM = 1.0 - clamp(isRedFrontM + isBlueFrontM + isGoldFrontM + isDarkFrontM, 0.0, 1.0);
+
+              // 客製化金屬度 (完全保留原圖顏色，僅改變物理反射)
+              // 姓名(0.85): 高級金屬光澤油墨 | 紙張(0.0) | 紅色(0.6) | 藍色(0.4) | 金色(0.7) | 一般黑色(0.3)
+              metalnessFactor = 0.0 * isPaperFrontM + 0.6 * isRedFrontM + 0.4 * isBlueFrontM + 0.7 * isGoldFrontM + 0.85 * isNameInkM + 0.3 * isOtherDarkM;
+            #endif
+            `
+          );
+      };
+
+      // --- 4b. 背面材質 (簡易霧面紙張) ---
+      backMat = new THREE.MeshPhysicalMaterial({ 
+        color: 0xfdfdfd,       
+        roughness: 0.8,        
+        metalness: 0.0,       
+      });
+
+      const materials = [
+        darkMaterial, darkMaterial, darkMaterial, darkMaterial, 
+        frontMat, backMat
+      ];
+
+      certificateMesh = new THREE.Mesh(geometry, materials);
+      certificateMesh.castShadow = true;
+      certificateMesh.receiveShadow = true;
+      
+      microGroup.add(certificateMesh);
+
+      macroGroup.rotation.x = 0.05;
+      macroGroup.rotation.y = -0.15; 
+
+      setIsLoading(false);
+
+    }, undefined, (err) => {
+      console.error("貼圖載入失敗:", err);
+      setIsLoading(false);
+    });
+
+    // --- 5. 地板陰影 ---
+    const planeGeo = new THREE.PlaneGeometry(20, 20);
+    const planeMat = new THREE.ShadowMaterial({ opacity: 0.5 }); 
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -2; 
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // --- 6. 互動與動畫邏輯 ---
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    
+    let targetMacroRotation = { x: 0.05, y: -0.15 }; 
+    let currentMacroRotation = { x: 0.05, y: -0.15 }; 
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    const onPointerDown = (e) => {
+      isDragging = true;
+      previousMousePosition = { x: e.clientX, y: e.clientY };
+    };
+
+    const onPointerMove = (e) => {
+      const rect = currentMount.getBoundingClientRect();
+      mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      if (isDragging) {
+        const deltaMove = {
+          x: e.clientX - previousMousePosition.x,
+          y: e.clientY - previousMousePosition.y
+        };
+
+        targetMacroRotation.y += deltaMove.x * 0.012; 
+        targetMacroRotation.x += deltaMove.y * 0.012;
+        targetMacroRotation.x = Math.max(-0.5, Math.min(0.5, targetMacroRotation.x));
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      }
+    };
+
+    const onPointerUp = () => {
+      isDragging = false;
+    };
+
+    const onResize = () => {
+      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    };
+
+    window.addEventListener('resize', onResize, { passive: true });
+    currentMount.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+
+    // --- 動畫迴圈 ---
+    const clock = new THREE.Clock();
+    let animationFrameId;
+
+    const animate = () => {
+      animationFrameId = requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      currentMacroRotation.x += (targetMacroRotation.x - currentMacroRotation.x) * 0.1;
+      currentMacroRotation.y += (targetMacroRotation.y - currentMacroRotation.y) * 0.1;
+      macroGroup.rotation.x = currentMacroRotation.x;
+      macroGroup.rotation.y = currentMacroRotation.y;
+
+      const targetMicroX = mouseY * 0.15; 
+      const targetMicroY = mouseX * 0.15; 
+      
+      microGroup.rotation.x += (targetMicroX - microGroup.rotation.x) * 0.1;
+      microGroup.rotation.y += (targetMicroY - microGroup.rotation.y) * 0.1;
+      microGroup.position.y = Math.sin(t * 1.5) * 0.05; 
+
+      const baseLightX = Math.sin(t * 1.5) * 1.5;
+      const baseLightY = Math.cos(t * 1.0) * 1.0;
+      
+      const targetLightX = baseLightX + (mouseX * 3.0);
+      const targetLightY = baseLightY + (mouseY * 3.0);
+      
+      foilLight.position.x += (targetLightX - foilLight.position.x) * 0.08;
+      foilLight.position.y += (targetLightY - foilLight.position.y) * 0.08;
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    // --- 7. 清除資源 ---
+    return () => {
+      window.removeEventListener('resize', onResize);
+      currentMount.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      cancelAnimationFrame(animationFrameId);
+      
+      if (currentMount.contains(renderer.domElement)) {
+        currentMount.removeChild(renderer.domElement);
+      }
+      
+      geometry.dispose();
+      darkMaterial.dispose();
+      planeGeo.dispose();
+      planeMat.dispose();
+      if (loadedFrontTex) loadedFrontTex.dispose();
+      if (frontMat) frontMat.dispose();
+      if (backMat) backMat.dispose();
+      renderer.dispose();
+    };
+  }, []);
+
+  return (
+    <div className="w-full h-screen bg-[#050505] overflow-hidden relative font-sans">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-900/15 rounded-full blur-[120px] pointer-events-none"></div>
+      
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70 tracking-widest text-sm pointer-events-none z-10">
+          <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin mb-4"></div>
+          LOADING ASSETS...
+        </div>
+      )}
+
+      <div 
+        ref={mountRef} 
+        className="w-full h-full cursor-grab active:cursor-grabbing relative z-0" 
+      />
+
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none p-8 flex flex-col justify-between z-10">
+        <header className="flex justify-between items-start">
+          <div className="text-white">
+            <h1 className="text-2xl font-bold tracking-wider mb-1">CERTIFICATE OF PARTICIPATION</h1>
+            <p className="text-white/50 text-sm tracking-widest font-mono uppercase">University of Maryland</p>
+          </div>
+          <div className="hidden md:block text-right text-white/30 text-xs font-mono">
+            <p>FULL MULTI-MATERIAL OPTIMIZATION</p>
+            <p>DRAG OR MOVE CURSOR</p>
+          </div>
+        </header>
+
+        <footer className="flex justify-between items-end">
+          <p className="text-white/40 text-xs max-w-sm">
+            Drag or hover over the certificate. Notice the <span className="text-white font-bold">premium hot-stamping foil ink</span> exclusively applied to the name "Pin-Han Tseng", reflecting light brilliantly without altering its original color.
+          </p>
+          <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center animate-pulse">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 9l7 7 7-7"/>
+            </svg>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,768 @@
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, createContext, useContext } from 'react';
+import { X, Play, Pause, ArrowRight, RotateCcw } from 'lucide-react';
+
+// ----------------------------------------------------------------------
+// [MODULE 1: DOMAIN DATA & CONFIGURATION]
+// ----------------------------------------------------------------------
+
+const CONFIG = {
+  TIMING: {
+    PULLBACK_DURATION: 1200,   
+    PUSHIN_DURATION: 1300,     
+    PANEL_DURATION: 800,       
+    DEFAULT_TRANSITION: 1200,  
+    SPEED_UP_MULTIPLIER: 25,
+    NORMAL_MULTIPLIER: 1,
+    LERP_FACTOR_SPEED: 0.05,
+    LERP_FACTOR_CAM: 0.08,
+    LERP_FACTOR_Z: 0.1,
+  },
+  CAMERA: {
+    PULLBACK: { scale: 0.35, rotateX: 35, y: -200 },
+    PUSHIN: { scale: 2.2, rotateX: 80, y: 100 },
+    IDLE: { scale: 1, rotateX: 75, y: 0 },
+    MOBILE_ACTIVE: { scale: 0.4, rotateX: 55, y: -20 },
+  },
+  LAYOUT: {
+    PANEL_WIDTH: 600,
+    SYS_MAX_SIZE: 950,
+    MD_BREAKPOINT: 768,
+  }
+};
+
+const STORY_CONTENT = [
+  { 
+    id: '1', chapter: 'Ep 1', title: '整飛機的白眼', 
+    excerpt: '十秒鐘只有引擎聲的沈默。她的眼睛微微一怔，緊接著，我們倆幾乎同時開始放聲大笑...', 
+    content: `突然想起了Crystal. \n\n我們第一次見面是在桃園機場，她和我都將代表自己的學校，前往美國並參與研究所的課程。在那之前我只有從Fulbright 的最終錄取名單上看過她的名字，也只知道她是台大的代表。\n\n「哼！自古有云：『北台大、南中山🥴』\n我倒想看看，我這個歷經四輪激烈篩選、萬中選一的中山派掌門人，在號稱武林正宗的台大派高手面前，會是什麼一副德行！」我心想。\n\n話雖如此，但其實當時在機場的我心中卻充滿了焦慮與不安。我對即將面臨的挑戰感到既緊張又恐懼，更對我即將共處兩週的夥伴感到既忐忑又期待。\n\n當時的我怎麼也想不到，兩週以後，這個人之後會徹底改變我對「夥伴」的理解。\n\n回到當時，我只記得我們初次見面就一見如故，像是兩個早已認識多年的老朋友。而這一切的故事得要從一架飛機說起。\n\n⋯\n\n登機後，我一邊拖著沈重的行李，一邊對著飛機上的座位號碼。\n\n「厚…找到了！我終於可以睡個大的啦～」\n\n我幻想著一覺醒來直接到美國的場景，嘴角不禁微微上揚。\n\n忽然，我看到了我的座位上，早已被放上了一個背包。\n\n我擔心中了敵人精心佈置的埋伏（沒，只是怕我坐錯位子）又怕直接一股腦兒坐下去會壞了江湖的規矩，只好站在座位旁乾等，心想：\n\n「等背包主人回來，咱們再解開誤會應該也不遲。」\n\n沒想到這一等，十分鐘就過去了。正當我暗暗叫苦，Crystal 忽然從走廊的另一端慢悠悠的晃了過來。\n\n「欸，借過——我要睡覺啦。」她懶洋洋地說。\n「嗯？！這不是我的位子嗎😳」\n\n十秒鐘只有引擎聲的沈默。\n\n她的眼睛微微一怔，緊接著，我們倆幾乎同時開始放聲大笑，笑聲大到似乎全飛機的人都朝我們這邊瞪了一眼、咕噥幾句後不甘願地戴上降噪耳機。\n\n笑聲仍持續著，怎麼也無法停下來。不知道為什麼，我突然不那麼緊張了。而先前的焦慮與恐懼，早已不知不覺煙消雲散。\n\n而故事才剛要開始。`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775542595/IMG_0105_nponb1.jpg',
+    imageAlt: '桃園機場內登機前的場景，兩位即將前往美國的學生背著行囊，氣氛充滿期待與未知的笑料。'
+  },
+  { 
+    id: '2', chapter: 'Ep 2', title: '危機將至', 
+    excerpt: '號稱台大派、成大派和中山派的武林代表的我們，眼前竟已騎虎難下...', 
+    content: `飛機落地，華盛頓機場人山人海。我們興沖沖地拖著大包小包的行李準備叫計程車前往飯店。殊不知，一場危機正在逐漸醞釀。\n\n「啊哈——我的Uber比你的便宜😎」我說。\n\n「欸強～欸！那要用你的訂嗎？」Crystal 問。\n\n「但我不確定我們四個人的行李塞不塞的下…」\n\n正當我們七嘴八舌地討論時，忽然，一名穿著機場工作人員制服的高大黑人朝我們走來。\n\n"Hey~ You guys need some help?"\n\n他老兄用一個過於熟練的微笑望著我們，手裏推著一台行李拖車，筆直地朝我們的方向走來。\n\n"Hmm… We’re just trying to figure out the Uber stuff. We’re fine. "\n\n另外一名和我們同行的台大派武林高手——絲昀平靜地說。\n\n哪知這位黑人老兄跟我們哈啦了兩句，竟開始自顧自的將我們的行李搬上他的手推車。\n\n"Uber?! It’s so slow.🙄"\n\n他翻了一個華麗的白眼，一邊繼續動作，一邊用他獨特的腔調向我們說明理由：\n\n" I’ll help you to get the taxi. It’s way~~faster. "\n\n他的嘴角逐漸上揚，似乎是對自己的安排非常滿意。然而，我們四人可不這麼想。\n\n「乾，我們會不會被賣掉啊？」Crystal 低聲問。嘈雜的機場中，她的聲音卻格外清楚。\n\n「呃…雖然他剛剛有跟機場的警察打招呼、又有出示他的證件啦…」我壓低聲音說。三人聽了，似乎稍微放鬆了一點。\n\n我深吸一口氣。\n\n「但也說不定…他們早就串通好、然後證件也是假的。」\n\n夜晚的華盛頓機場依然燈火通明。然而，我們四人的猜測卻悄悄偏離了原本的軌道。\n\n氣氛又變得更緊繃了。\n\n號稱台大派、成大派和中山派的武林代表的我們，眼前竟已騎虎難下。四人的行李全都在這位來歷不明的男子手上，任憑我們功夫再強，也是巧婦難為無米之炊。\n\n而更糟的是——我們開始無法確定，究竟是他可疑，還是我們自己想太多。`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775543643/IMG_0108_hshi9e.jpg',
+    imageAlt: '華盛頓機場人來人往的夜間大廳，一名身穿制服的高大男子正將學生的行李放上手推車。'
+  },
+  { 
+    id: '3', chapter: 'Ep 3', title: '未知的語言', 
+    excerpt: '沒想到，被公認為四人組中英文最頂尖的絲昀，一時之間竟也難以招架...', 
+    content: `夜晚的華盛頓機場外，只見兩人正用特有的語言激烈爭吵著。他們的語速節奏極快，聲音中帶著濃重的喉音與爆破感。\n\n「@$$%#$$#！！！」\n\n「@$$%$$$$#$$#……」\n\n「@$$!😡」\n\n而台大派、成大派和中山派的武林代表則站在一旁面面相覷、不知所措。\n\n「欸，他們在說什麼啊🤔」\n\nCrystal 用手肘推了推我，似乎很看得起我的英文聽力。但我們的眼光卻不約而同地望向真正的英文Master——台大派的絲昀。\n\n沒想到，被公認為四人組中英文最頂尖的絲昀，一時之間竟也難以招架。\n\n「這…不是英文吧？！」\n\n絲昀暗道，眉頭微微一皺。其餘三人聽到後，都暗暗叫苦。原來，當初在機場遇到的工作人員，正在用方言和同為黑人的計程車司機討價還價。\n\n「@$$%$$$$#$$#……」\n\n「@$$%#$$#！！！」\n\n只見兩人越吵越兇，四人組這邊卻顯得格外安靜。我們這群在台灣威震四方的武林高手，卻在剛踏上美國的第一天便感到束手無策。\n\n我的雙手忍不住開始顫抖，不知是因為外頭刺骨的寒冷、還是內心原始的恐懼。看向Crystal ，她微微發白的嘴唇似乎也透漏出了此刻的感受。`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775544792/IMG_0109_sqgyik.jpg',
+    imageAlt: '夜晚寒冷的機場外，工作人員與計程車司機正激烈爭吵，四名台灣學生在一旁面露不安。'
+  },
+  { 
+    id: '4', chapter: 'Ep 4', title: '從未用過的單字', 
+    excerpt: '一開始幫我們搬行李的機場老兄正用貪婪的眼神，死死地盯著我們...', 
+    content: `“You’re going to Baltimore?”\n“Yeah, the hotel at UMD, Baltimore Avenue. “\n\n成大派的Sam默默地拿出了那張，被捏得有些發皺的 Fulbright 活動說明傳單。\n\n“No… I can’t drive you there. Just go to find another taxi. “\n\n司機緊蹙著眉頭，嚴肅地對我們說。\n\n此時在一旁細聽的絲昀立即嗅出了不對勁：\n“It’s Baltimore Avenue in College Park, not Baltimore City. “\n\n司機頓時恍然大悟：”Oh😳 Then it’s fine.   I’ll drive you there. “\n\n原來，他們把馬里蘭大學的「巴爾的摩大道」聽成相對危險的「巴爾的摩市」。儘管誤會稍稍解開，但也暗示著——我們再也沒有理由撤退了。\n\n正當我們硬著頭皮上車時，竟沒注意到一開始幫我們搬行李的機場老兄正用貪婪的眼神，死死地盯著我們。\n\n「咳咳。」他老兄清了清喉嚨。\n\n只見他沒有馬上開口，而是先低頭看了看地上的行李，又轉頭看了看那輛發動中的計程車，最後才緩緩地將視線鎖定在我們中間。\n\n我們四名武林高手立刻警戒，而儘管他欲言又止，隨後還是說出了那個我們在台灣接受嚴格武術訓練時，只略為聽聞、卻從來沒用過的單字。\n\n“Tips. “\n\n他下巴微抬、一隻手插著口袋取暖，另外一隻手掌心朝上，向我們索取小費。`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775545418/IMG_0110_dbcwvu.jpg',
+    imageAlt: '機場工作人員掌心向上，做出了索取小費的手勢，眼神直盯著不知所措的學生。'
+  },
+  { 
+    id: '5', chapter: 'Ep 5', title: '四十美金的沉默', 
+    excerpt: '原來號稱中山派掌門人的曾品翰，此刻竟怕得要死...', 
+    content: `「呃…完蛋了，要給多少啊🥶」\n\n就連一生獲獎無數、更曾在美國比武大賽奪牌的世界級武林高手絲昀，此時竟也不知所措，轉頭問向還在傻眼的我。\n\n「呃…嗯？蛤😳」「我…我怎麼知道…🥺」\n\n被絲昀這麼一Cue，我就更加傻眼了。看來你各位都把我想像的很厲害呢😎\n\n「還是先…二十塊美金（？」\n\n我隨便講了一個錢包中面額最大的數字，期盼能用這一張紙，狠狠地塞入這隻老狐狸的嘴，讓他趕緊嘴巴閉閉。\n\n絲昀見狀，也來不及多加思索，慌慌張張地用顫抖的手在錢包中翻來找去。蓄力了一會兒，總算是「唰」地一聲，使出了來美國的第一招——美金攻勢。\n\n只見那張二十鎂鈔票似乎是剛從銀行領出，邊角銳利得像暗器。防偽油墨反射著機場內的燈光，在黑暗的機場外顯得格外刺眼。\n\n正當我們對絲昀發出的這招暗自叫好時，卻渾然不知——對手的臉上閃過了一絲絲的不快。\n\n這位自初次見面以來便笑臉迎人的高大男子，卻在見到絲昀亮出二十鎂的瞬間，臉突然垮了下來。\n\n“No No No! “ \n\n他的雙手拼命搖擺，嘴裏不停重複的同一個單字。正當我們暗自慶幸不需要付那麼多小費時，只見他的眼睛一眯，嘴裡呼出淡淡的白煙，緩緩地吐出一句：\n\n“Not enough. “\n\n馬里蘭幫的四人組頓時傻眼。\n\n「三…三小啊？！二十鎂還不夠？！」\n\nCrystal 第一個跳腳。正要抗議，卻聽見我壓低了聲音，對絲昀說：\n\n「好啦，就給他吧。」\n\n原來號稱中山派掌門人的曾品翰，此刻竟怕得要死，哪管什麼幾十鎂的，還是保住性命最重要。\n\n絲昀微微點了點頭以示同意，對Crystal 露出了一個苦笑後，顫抖的手再次伸向錢包。「唰」地一聲，又是一招勇猛的「二十鎂攻勢」。\n\n就在台大派高手出招的瞬時，馬里蘭幫的其他三名武林高手急忙瞧向對手的表情。只見男子原本垮掉的嘴角在接下絲昀的第二招攻勢後，竟不爭氣地上揚了起來。\n\n“Thank you! Have a good night! “\n\n緊接著「砰」的一聲，男子將計程車的車門重重地關上，表情竟回到了那個我們早已熟悉的、過於熟練的笑容。\n\n那一聲巨大的「砰」，震碎了我們最後的幻想。車內陷入了一種死寂，只有暖氣微弱的運轉聲。我們四個人誰也沒有說話，車廂內瀰漫著一片價值 40 美金的沈默。\n\n隔著那片充滿霧氣的車窗，我先是看了看男子逐漸縮小的背影，再看了看我的夥伴，最後露出無奈的苦笑。而在方才這聲巨響後，我們的後路也隨著計程車的車門一同關上…`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775545606/IMG_0111_glckzk.jpg',
+    imageAlt: '計程車車門重重關上，車廂內瀰漫著付了四十美元鉅額小費後的死寂與無奈氛圍。'
+  },
+  { 
+    id: '6', chapter: 'Ep 6', title: '偏離軌道', 
+    excerpt: '「我在網路上看到的詐騙計程車也有一模一樣的。」...', 
+    content: `計程車上，低沉的引擎聲轟隆隆地作響。我看向駕駛座，一個碩大的平板顯示著地圖和跳表的軟體。\n\n「欸欸，他有在跳表耶！那應該不是什麼人口販賣組織吧！」\n\n我壓低聲音，興奮地向大夥兒分享我的發現。正當Crystal 跟絲昀原本深鎖的眉頭稍微舒展開來時，一直沉默不語的成大派Sam卻一語驚人。\n\n「我在網路上看到的詐騙計程車也有一模一樣的。」\n\n他語氣平淡、面無表情地說。\n\n「呃…這…」\n\n我瞬間啞口無言。只見Sam開啟手機上的Google map，道：\n\n「我來導航一下，看看他有沒有繞路。」\n\nCrystal 也趕緊負荷：\n\n「那我來聯絡一下在飯店的老師。」\n\n我和絲昀仍對剛剛的對峙心有餘悸，只好看向窗戶發呆。我們來時正好碰到十年一遇的暴風雪，再加上深夜已近，行人們屈指可數。\n\n車上的暖氣直直地朝著我的臉龐吹來，和外頭的低溫形成鮮明的對比。儘管如此，四人的手指卻仍不自禁地微微顫抖。\n\n隨著計程車開始加速，車窗外的景色逐漸被拉長。飛速劃過的雪片，看起來就像是一條條被拉長的白線，正要把我們織進一場未知的陷阱裡。`,
+    imageUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775545607/IMG_0112_ghd6rn.jpg',
+    imageAlt: '昏暗的計程車內，手機螢幕上的 Google Map 導航藍點正逐漸偏離建議路線。'
+  },
+  { 
+    id: '7', chapter: 'Ep 7', title: '生命的十字路口', 
+    excerpt: '一片駭人的沈默。周遭只剩下「唰、唰」的雨刷聲和轟隆隆的引擎聲。計程車因為紅燈停了下來...', 
+    content: `近乎同時，Sam再一次開口打破了寧靜。而他的語氣，明顯多了一份緊張。\n\n「欸欸，你們快看。」\n\n他急急忙忙地將手機翻到正面，三人趕緊湊上前去，瞇著眼緊盯著黑暗中刺眼的屏幕。頓時，四人面如死灰。\n\n只見地圖上的那個藍色小點，竟逐漸偏離建議路線。\n\n一片駭人的沈默。周遭只剩下「唰、唰」的雨刷聲和轟隆隆的引擎聲。計程車因為紅燈停了下來。\n\n「還…還是有可能…只是他…來不及轉啊，我們等這個紅綠燈，如果他還是沒轉彎我們再跟司機說…怎麼樣？」\n\n我表面上試圖幫司機辯解，內心深處卻是極爲不想面對。\n\n「嗯，嗯…」Crystal 微微點了點頭，不安地再次望向手機。\n\n「我已經請老師在飯店門口等我們了！至少等一下到的時候比較不會被欺負。」\n\nCrystal 又道，似乎是想緩解一下大家心中的焦慮。\n\n「嗯。」\n\n我、絲昀和Sam輕輕地應了一聲，然後又是一陣令人煎熬的靜默。\n\n綠燈了，四人屏氣凝神地盯著方向盤，就看司機要往左轉還是繼續前進。如果繼續直走…我們想都不敢想。果真是生命的十字路口哪。`,
+    imageAlt: '計程車停在深夜大雪中的紅綠燈前，車內四人緊盯著司機的方向盤，氣氛降至冰點。'
+  },
+  { 
+    id: '8', chapter: 'Ep 8', title: '鬼門關前', 
+    excerpt: '我們大吃一驚，計程車迴轉帶來的巨大慣性將我們四人拋向一邊...', 
+    content: `計程車搖晃了一陣，停頓了幾下。司機雙手來回交錯——左轉了！\n\n我們暗自竊喜，正當我們朝思暮想的飯店和老師們就近在眼前時！不知為何，飯店的招牌竟慢慢變地模糊、逐漸縮小到黑夜之中。\n\n我們驚恐的看向司機，只見他一句話也不說地雙手來回交錯——\n\n竟又開始掉頭。\n\n我們大吃一驚，計程車迴轉帶來的巨大慣性將我們四人拋向一邊。\n\n“Excuse me…” \n\n危急時刻，向來沉默不語的Sam竟是第一個開口。\n\n只見司機的眉頭微微一皺。\n\n“Yeah… We can’t go this way. “\n\n經過了一番複雜的溝通，四人組才知道——\n\n原來是夜晚的大雪讓司機視線不佳，錯過了飯店接駁專屬的路。方才的迴轉單單只是他想再試一次的結果。\n\n我們鬆了好大一口氣，又經歷了一次迴轉。\n\n過了一會兒，「喀噠」地一聲，車門終於緩緩地開啟。看著兩位老師真的站在飯店門口，剛從鬼門關前走一遭的四名大俠，竟感動地快哭了。\n\n「怎麼了！你們沒事吧！」\n\n「嗚嗚嗚…老師😭😭」\n\n才剛下車，零下的馬里蘭就將我們緊緊包裹了起來。但此刻的我們，竟絲毫感覺不到一絲絲的寒冷，只覺得全身都暖洋洋的。`,
+    imageAlt: '計程車在雪夜中突然迴轉的驚險瞬間，隨後安全抵達飯店，老師們在門口迎接。'
+  },
+  { 
+    id: '9', chapter: 'Ep 9', title: '患難之情', 
+    excerpt: '馬里蘭幫的四人繃緊了神經，就連在站一旁的老師們也凝重地望著司機...', 
+    content: `忽然，司機輕咳了一聲。而我們的心裡都早有預感——\n\n是時候該算錢了。\n\n馬里蘭幫的四人繃緊了神經，就連在站一旁的老師們也凝重地望著司機。\n\n「咳咳。」「總共是…」\n\n司機先看向我們，再怯怯地瞄了瞄老師。\n\n「四、四十美金。」\n\n我迅速地在心中進行複雜的傅立葉展開，算出一個令人驚喜的結果：就算加上剛剛絲昀的美金攻勢，居然還比Uber便宜了一丟丟。（趕快把手機上的計算機滑掉）\n\n我暗自竊喜，好心地將結果告訴不會傅立葉展開的Crystal，不然她可要算老久了。大家在得知結果後，緊繃已久的眉頭終於真正舒展了開來。\n\n在和司機及老師道謝後，我們走進飯店。踏進大廳的瞬間，地毯柔軟的觸感彷彿在歡迎我們，從鬼門關前幸運回來。\n\n「啊，真的是歷經萬難啊！就是這裡了。」四人心道。\n\n奢侈的暖氣擁抱著大家，大廳裡溫暖的黃光和室外寒冷的夜色形成了鮮明的藍黃對比。\n\n儘管才剛踏進來沒多久，我們卻早已不知不覺地對這裡有了歸屬感。\n\n外頭的強風依舊。但四人幫的彼此，已經開始有了患難之情呢。`,
+    imageAlt: '四人小隊平安進入充滿暖黃色燈光的飯店大廳，感受到歷劫歸來後的溫馨與歸屬感。'
+  }
+];
+
+const ORBIT_CONFIG = {
+  '1': { planet: 'Sun', radius: 0, speed: 0, size: 56, color: 'from-yellow-100 via-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.8)' },
+  '2': { planet: 'Mercury', radius: 80, speed: 0.005, size: 12, color: 'from-neutral-400 to-neutral-600', glow: 'rgba(163, 163, 163, 0.5)' },
+  '3': { planet: 'Venus', radius: 120, speed: 0.0035, size: 16, color: 'from-yellow-500 to-orange-600', glow: 'rgba(234, 179, 8, 0.5)' },
+  '4': { planet: 'Earth', radius: 170, speed: 0.0028, size: 18, color: 'from-blue-400 to-emerald-500', glow: 'rgba(59, 130, 246, 0.6)' },
+  '5': { planet: 'Mars', radius: 220, speed: 0.0022, size: 14, color: 'from-red-500 to-orange-700', glow: 'rgba(239, 68, 68, 0.5)' },
+  '6': { planet: 'Jupiter', radius: 280, speed: 0.0016, size: 32, color: 'from-orange-300 to-amber-700', glow: 'rgba(217, 119, 6, 0.5)' },
+  '7': { planet: 'Saturn', radius: 350, speed: 0.001, size: 26, color: 'from-yellow-200 to-yellow-600', glow: 'rgba(234, 179, 8, 0.4)', hasRing: true },
+  '8': { planet: 'Uranus', radius: 410, speed: 0.0007, size: 20, color: 'from-cyan-300 to-blue-500', glow: 'rgba(34, 211, 238, 0.5)' },
+  '9': { planet: 'Neptune', radius: 470, speed: 0.0005, size: 20, color: 'from-blue-600 to-indigo-800', glow: 'rgba(59, 130, 246, 0.5)' }
+};
+
+// 【優化點 1】將資料聚合抽至全域常數，徹底穩定 React 元件的資料生命週期
+const APP_DATA = STORY_CONTENT.map(story => ({ ...story, ...ORBIT_CONFIG[story.id] }));
+
+
+// ----------------------------------------------------------------------
+// [MODULE 2: CORE PHYSICS ENGINE]
+// 【優化點 3】通用化物理引擎，透過 config 注入來取代對全域 CONFIG 的強耦合
+// ----------------------------------------------------------------------
+
+class SolarPhysicsEngine {
+  constructor(nodes, timingConfig, isReducedMotion) {
+    this.nodes = nodes;
+    this.timingConfig = timingConfig;
+    this.subscribers = new Map();
+    this.cameraSubscriber = null;
+    this.isReducedMotion = isReducedMotion;
+    
+    this.state = { isPaused: false, hoveredId: null, targetId: null, activeId: null, phase: 'idle' };
+    this.physics = { speedMultiplier: timingConfig.NORMAL_MULTIPLIER, camX: 0, camY: 0, nodes: {} };
+
+    // 泛化：用半徑 (radius === 0) 判斷是否為中心星體，而非依賴 isSun 旗標
+    const orbitNodeCount = nodes.filter(n => n.radius > 0).length;
+    nodes.forEach((n, index) => {
+      this.physics.nodes[n.id] = {
+        z: 0, scale: 1, labelY: 0, labelScale: 1,
+        angle: n.radius === 0 ? 0 : (index * 2 * Math.PI) / (orbitNodeCount || 1)
+      };
+    });
+
+    this.lastTime = performance.now();
+    this.reqId = null;
+    this.loop = this.loop.bind(this);
+  }
+
+  updateContext(newState, isReducedMotion) {
+    this.state = { ...this.state, ...newState };
+    this.isReducedMotion = isReducedMotion;
+  }
+
+  subscribeNode(id, callback) {
+    this.subscribers.set(id, callback);
+    return () => this.subscribers.delete(id);
+  }
+
+  subscribeCamera(callback) {
+    this.cameraSubscriber = callback;
+    return () => { this.cameraSubscriber = null; };
+  }
+
+  start() {
+    if (!this.reqId) this.reqId = requestAnimationFrame(this.loop);
+  }
+
+  stop() {
+    if (this.reqId) {
+      cancelAnimationFrame(this.reqId);
+      this.reqId = null;
+    }
+  }
+
+  loop(timestamp) {
+    let deltaTime = timestamp - this.lastTime;
+    this.lastTime = timestamp;
+    if (deltaTime > 100) deltaTime = 16.666; 
+    const timeScale = deltaTime / 16.666;
+
+    const frameAwareLerp = (start, end, factor) => start + (end - start) * (1 - Math.pow(1 - factor, timeScale));
+
+    const targetSpeedMultiplier = this.isReducedMotion ? 0 : 
+      (this.state.phase === 'pullback' ? this.timingConfig.SPEED_UP_MULTIPLIER : this.timingConfig.NORMAL_MULTIPLIER);
+
+    this.physics.speedMultiplier = frameAwareLerp(this.physics.speedMultiplier, targetSpeedMultiplier, this.timingConfig.LERP_FACTOR_SPEED);
+
+    const isActuallyPlaying = !this.state.isPaused && !this.state.hoveredId && !this.isReducedMotion;
+    if (isActuallyPlaying || this.physics.speedMultiplier > 1.05) { 
+      this.nodes.forEach(node => {
+        if (node.radius > 0) this.physics.nodes[node.id].angle += node.speed * this.physics.speedMultiplier * timeScale;
+      });
+    }
+
+    let targetCamX = 0, targetCamY = 0;
+    const isPushin = this.state.phase === 'pushin';
+    const isZooming = this.state.phase !== 'idle';
+
+    if (isPushin && this.state.targetId) {
+      const targetNode = this.nodes.find(n => n.id === this.state.targetId);
+      if (targetNode && targetNode.radius > 0) {
+        const angle = this.physics.nodes[targetNode.id].angle;
+        targetCamX = -targetNode.radius * Math.cos(angle);
+        targetCamY = -targetNode.radius * Math.sin(angle);
+      }
+    }
+
+    this.physics.camX = frameAwareLerp(this.physics.camX, targetCamX, this.timingConfig.LERP_FACTOR_CAM);
+    this.physics.camY = frameAwareLerp(this.physics.camY, targetCamY, this.timingConfig.LERP_FACTOR_CAM);
+
+    if (this.cameraSubscriber) this.cameraSubscriber(this.physics.camX, this.physics.camY);
+
+    this.nodes.forEach(node => {
+      const isTarget = this.state.targetId === node.id;
+      const isSelected = this.state.activeId === node.id;
+      const isHovered = this.state.hoveredId === node.id;
+      const pNode = this.physics.nodes[node.id];
+
+      let x = 0, y = 0;
+      if (node.radius > 0) {
+        x = node.radius * Math.cos(pNode.angle);
+        y = node.radius * Math.sin(pNode.angle);
+      }
+
+      pNode.z = frameAwareLerp(pNode.z, (isTarget && isPushin) ? 100 : 0, this.timingConfig.LERP_FACTOR_Z);
+      pNode.scale = frameAwareLerp(pNode.scale, ((isHovered || isSelected) && !isZooming) || (isTarget && isZooming) ? 1.15 : 1, 0.15);
+      pNode.labelY = frameAwareLerp(pNode.labelY, ((isHovered || isSelected) && !isZooming) ? -8 : 0, 0.15);
+      pNode.labelScale = frameAwareLerp(pNode.labelScale, ((isHovered || isSelected) && !isZooming) ? 1.1 : 1, 0.15);
+
+      const notify = this.subscribers.get(node.id);
+      if (notify) notify({ x, y, z: pNode.z, scale: pNode.scale, labelY: pNode.labelY, labelScale: pNode.labelScale });
+    });
+
+    this.reqId = requestAnimationFrame(this.loop);
+  }
+}
+
+
+// ----------------------------------------------------------------------
+// [MODULE 3: CONTEXTS & CUSTOM HOOKS]
+// ----------------------------------------------------------------------
+
+const EngineContext = createContext(null);
+
+function useWindowContext() {
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setWindowWidth(w);
+      setScale(Math.min(1.1, Math.min(w, window.innerHeight) / CONFIG.LAYOUT.SYS_MAX_SIZE));
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return { windowWidth, scale };
+}
+
+function useReducedMotion() {
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const handler = (e) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+  return reducedMotion;
+}
+
+function useDialogFocus(isOpen, onClose) {
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement;
+      const focusTimer = setTimeout(() => {
+        if (dialogRef.current) {
+          const focusableElements = dialogRef.current.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusableElements.length > 0) focusableElements[0].focus();
+        }
+      }, 50);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        } else if (e.key === 'Tab' && dialogRef.current) {
+          const focusableElements = dialogRef.current.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusableElements.length === 0) return;
+          const first = focusableElements[0];
+          const last = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            last.focus(); e.preventDefault();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            first.focus(); e.preventDefault();
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(focusTimer);
+        document.removeEventListener('keydown', handleKeyDown);
+        if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
+          previousFocusRef.current.focus();
+        }
+      };
+    }
+  }, [isOpen, onClose]);
+
+  return dialogRef;
+}
+
+function useStoryMachine(nodes, reducedMotion) {
+  const [machineState, setMachineState] = useState({ phase: 'idle', targetId: null, activeId: null });
+
+  const navigateTo = useCallback((targetId) => {
+    setMachineState(prev => {
+      if (prev.activeId === targetId) return prev;
+      if (prev.activeId) return { phase: 'pullback', activeId: null, targetId }; 
+      return { phase: 'pushin', activeId: null, targetId }; 
+    });
+  }, []);
+
+  const closeArticle = useCallback(() => {
+    setMachineState(prev => {
+      if (prev.phase === 'idle' && !prev.activeId) return prev;
+      return { phase: 'pullback', activeId: null, targetId: null };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (machineState.phase === 'idle') return;
+    
+    let duration = machineState.phase === 'pullback' ? CONFIG.TIMING.PULLBACK_DURATION : CONFIG.TIMING.PUSHIN_DURATION;
+    if (reducedMotion) duration = 10; 
+
+    const timerId = setTimeout(() => {
+      setMachineState(prev => {
+        if (prev.phase === 'pullback') return prev.targetId ? { ...prev, phase: 'pushin' } : { phase: 'idle', activeId: null, targetId: null };
+        if (prev.phase === 'pushin') return { phase: 'idle', activeId: prev.targetId, targetId: null };
+        return prev;
+      });
+    }, duration + 50);
+
+    return () => clearTimeout(timerId);
+  }, [machineState.phase, reducedMotion]);
+
+  return { machineState, navigateTo, closeArticle };
+}
+
+
+// ----------------------------------------------------------------------
+// [MODULE 4: PRESENTATIONAL COMPONENTS]
+// ----------------------------------------------------------------------
+
+const GlobalStyles = () => (
+  <style>{`
+    .preserve-3d { transform-style: preserve-3d; }
+    .will-change-transform { will-change: transform; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+    .bg-noise { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E"); }
+
+    /* 定義組件需要的動畫，不依賴外部環境 */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    /* 【優化點 2】終極 A11y Reduced Motion 防護網：在 CSS 層強制覆寫一切動態，包含軌道線等邊緣元素 */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+      .animate-fade-in-up { animation: none !important; opacity: 1 !important; transform: none !important; }
+    }
+  `}</style>
+);
+
+const Background = () => (
+  <>
+    <GlobalStyles />
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02)_0%,transparent_80%)] pointer-events-none" />
+    <div className="absolute inset-0 bg-noise pointer-events-none mix-blend-color-dodge opacity-60" />
+  </>
+);
+
+const Header = () => (
+  <header className="absolute top-6 left-6 md:top-8 md:left-10 z-20 pointer-events-none">
+    <h1 className="text-xl md:text-2xl font-light tracking-[0.3em] text-white/90 drop-shadow-lg">
+      TRAVEL<span className="text-white/40">STORY</span>
+    </h1>
+    <p className="text-[9px] md:text-[10px] text-neutral-500 mt-2 md:mt-3 flex items-center gap-2 font-light tracking-[0.2em] uppercase">
+      A Journey through the solar system
+    </p>
+  </header>
+);
+
+const PlayControls = ({ isUserPaused, togglePause, isReducedMotion }) => {
+  if (isReducedMotion) return null; 
+  return (
+    <div className="absolute bottom-6 right-6 md:bottom-8 md:right-10 z-20 flex gap-6 text-neutral-500">
+      <button onClick={togglePause} className="group hover:text-white transition-colors flex items-center gap-3 text-[9px] tracking-[0.2em] uppercase font-light">
+        <span className="p-2 md:p-2.5 rounded-full border border-white/10 group-hover:border-white/30 transition-colors">
+          {isUserPaused ? <Play size={14} strokeWidth={1.5} /> : <Pause size={14} strokeWidth={1.5} />}
+        </span>
+        {isUserPaused ? '繼續' : '暫停'}
+      </button>
+    </div>
+  );
+};
+
+const ArticlePanel = ({ activeId, isIdle, onNavigate, onClose, nodes, isReducedMotion }) => {
+  const isOpen = !!activeId && isIdle;
+  const dialogRef = useDialogFocus(isOpen, onClose);
+
+  const activeArticle = nodes.find(n => n.id === activeId);
+  if (!activeArticle) return null;
+  
+  const currentIndex = nodes.findIndex(n => n.id === activeId);
+  const nextArticleNode = (currentIndex >= 0 && currentIndex < nodes.length - 1) ? nodes[currentIndex + 1] : null;
+
+  return (
+    <aside 
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`article-title-${activeArticle.id}`}
+      aria-hidden={!isOpen}
+      tabIndex={-1}
+      className={`absolute top-0 right-0 h-full w-full md:w-[600px] max-w-full bg-[#030408]/90 backdrop-blur-3xl md:border-l border-white/10 
+      ease-[cubic-bezier(0.16,1,0.3,1)] z-50 shadow-[-40px_0_80px_rgba(0,0,0,0.8)] focus:outline-none
+      ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      style={{ transitionDuration: isReducedMotion ? '1ms' : `${CONFIG.TIMING.PANEL_DURATION}ms`, transitionProperty: 'transform' }}
+    >
+      <article className="h-full flex flex-col relative animate-fade-in-up">
+        <header className="flex justify-between items-center px-8 py-8 md:px-12 md:py-10 border-b border-white/[0.05] shrink-0 pt-8 md:pt-10">
+          <div className="flex items-center gap-4">
+            <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${activeArticle.color}`} style={{ boxShadow: `0 0 12px ${activeArticle.glow}` }} />
+            <div className="flex flex-col">
+              <span className="text-[9px] md:text-[10px] text-neutral-500 font-light tracking-[0.25em] uppercase mb-1">
+                {activeArticle.radius === 0 ? '恆星 / 中心' : `行星 / 軌道 ${activeArticle.id}`}
+              </span>
+              <span className="text-[12px] md:text-[14px] text-neutral-300 font-light tracking-[0.15em] uppercase">
+                {activeArticle.planet}
+              </span>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            aria-label="關閉故事面板"
+            className="text-neutral-500 hover:text-white transition-all bg-white/5 hover:bg-white/15 p-3 rounded-full backdrop-blur-md focus-visible:ring-2 focus-visible:ring-white/50 focus:outline-none"
+          >
+            <X size={20} strokeWidth={1.5} />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-8 py-10 md:px-12 md:py-12 pb-32 custom-scrollbar relative">
+          <h2 id={`article-title-${activeArticle.id}`} className="text-[1.8rem] md:text-[2.2rem] font-medium text-white/95 leading-[1.2] mb-8 md:mb-10 tracking-tight">
+            {activeArticle.chapter}: {activeArticle.title}
+          </h2>
+          
+          {activeArticle.imageUrl && (
+            <figure className="mb-10 md:mb-14 w-full aspect-video overflow-hidden rounded-xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-neutral-900">
+              <img src={activeArticle.imageUrl} className={`w-full h-full object-cover opacity-90 hover:opacity-100 ${isReducedMotion ? '' : 'hover:scale-105 transition-all duration-[1.5s] ease-[cubic-bezier(0.16,1,0.3,1)]'}`} loading="lazy" alt={activeArticle.imageAlt} />
+            </figure>
+          )}
+
+          <blockquote className="text-[1.05rem] md:text-[1.15rem] text-white/70 font-light mb-10 md:mb-14 leading-[1.9] border-l-[2px] border-white/20 pl-5 md:pl-6">
+            {activeArticle.excerpt}
+          </blockquote>
+
+          <div className="prose prose-invert prose-p:font-light prose-p:text-neutral-300 prose-p:leading-[2.1] max-w-none space-y-6">
+            {activeArticle.content.split('\n').map((paragraph, idx) => (
+              paragraph.trim() !== '' && <p key={`p-${idx}`}>{paragraph}</p>
+            ))}
+          </div>
+
+          <nav className="mt-20 md:mt-24">
+            {nextArticleNode ? (
+              <button
+                onClick={() => onNavigate(nextArticleNode.id)}
+                aria-label={`前往下一站：${nextArticleNode.title}`}
+                className="group w-full relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-8 md:p-10 transition-all hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-white/50 focus:outline-none"
+              >
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="flex flex-col items-start gap-2 md:gap-3">
+                    <span className="text-[9px] md:text-[10px] text-neutral-500 font-light tracking-[0.3em] uppercase">下一站</span>
+                    <span className="text-lg md:text-xl text-white/95 font-medium tracking-wide">{nextArticleNode.chapter}: {nextArticleNode.title}</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-white/10 transition-all">
+                    <ArrowRight size={20} className="text-neutral-400 group-hover:text-white group-hover:translate-x-1.5 transition-all" strokeWidth={1} />
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <button 
+                onClick={onClose} 
+                className="flex items-center gap-4 mx-auto px-8 py-4 rounded-full border border-white/15 bg-black/40 text-[9px] tracking-[0.3em] text-white/70 hover:text-white transition-all focus-visible:ring-2 focus-visible:ring-white/50 focus:outline-none"
+              >
+                <RotateCcw size={14} strokeWidth={1.5} /> 返回軌道
+              </button>
+            )}
+          </nav>
+        </div>
+      </article>
+    </aside>
+  );
+};
+
+const PlanetNode = ({ node, isHovered, isSelected, isTarget, phase, isReducedMotion, shouldBlur, onMouseEnter, onMouseLeave, onNavigate }) => {
+  const rootRef = useRef(null);
+  const bodyRef = useRef(null);
+  const labelContainerRef = useRef(null);
+  const labelTextRef = useRef(null);
+
+  const engine = useContext(EngineContext);
+
+  useEffect(() => {
+    if (!engine) return;
+    const unsubscribe = engine.subscribeNode(node.id, ({ x, y, z, scale, labelY, labelScale }) => {
+      if (rootRef.current) rootRef.current.style.transform = `translate3d(${x}px, ${y}px, ${z}px) rotateX(-75deg)`;
+      if (bodyRef.current) bodyRef.current.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      if (labelContainerRef.current) labelContainerRef.current.style.transform = `translate(-50%, ${labelY}px)`;
+      if (labelTextRef.current) labelTextRef.current.style.transform = `scale(${labelScale})`;
+    });
+    return unsubscribe;
+  }, [engine, node.id]);
+
+  let transitionDuration;
+  if (isReducedMotion) transitionDuration = '1ms';
+  else if (phase === 'pullback') transitionDuration = `${CONFIG.TIMING.PULLBACK_DURATION}ms`;
+  else if (phase === 'pushin') transitionDuration = `${CONFIG.TIMING.PUSHIN_DURATION}ms`;
+  else transitionDuration = `${CONFIG.TIMING.DEFAULT_TRANSITION}ms`;
+
+  const isZooming = phase !== 'idle';
+  const isCenterStar = node.radius === 0;
+
+  return (
+    <div
+      ref={rootRef}
+      role="button"
+      tabIndex={isZooming ? -1 : 0}
+      aria-label={`檢視故事: ${node.chapter} ${node.title}`}
+      className={`absolute top-0 left-0 preserve-3d cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:rounded-full
+        ${!isCenterStar ? 'will-change-transform' : ''}
+        ${shouldBlur ? 'opacity-10 blur-md pointer-events-none' : 'opacity-100 blur-0'}
+      `}
+      onMouseEnter={() => !isZooming && onMouseEnter(node.id)}
+      onMouseLeave={() => !isZooming && onMouseLeave()}
+      onClick={() => !isZooming && onNavigate(node.id)}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !isZooming) {
+          e.preventDefault();
+          onNavigate(node.id);
+        }
+      }}
+      style={{ 
+        transitionProperty: 'opacity, filter', 
+        transitionDuration: transitionDuration,
+        transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)'
+      }}
+    >
+      {isCenterStar && !isReducedMotion && (
+        <>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[160%] rounded-full animate-pulse bg-orange-400/20 blur-[15px] pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] rounded-full bg-yellow-300/10 blur-[30px] pointer-events-none" />
+        </>
+      )}
+
+      {node.hasRing && (
+        <div 
+          className="absolute top-1/2 left-1/2 rounded-full border-[1px] border-yellow-200/30"
+          style={{ 
+            width: node.size * 2.8, height: node.size * 2.8,
+            transform: 'translate(-50%, -50%) rotateX(75deg)', 
+            boxShadow: '0 0 15px rgba(234, 179, 8, 0.15) inset, 0 0 15px rgba(234, 179, 8, 0.15)'
+          }} 
+        />
+      )}
+
+      <div 
+        ref={bodyRef}
+        className={`absolute top-1/2 left-1/2 rounded-full bg-gradient-to-br ${node.color}`}
+        style={{
+          width: node.size, height: node.size,
+          transitionProperty: 'box-shadow', 
+          transitionDuration: transitionDuration,
+          transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+          boxShadow: isCenterStar
+            ? `0 0 40px 10px ${node.glow}, 0 0 80px 30px rgba(249, 115, 22, 0.2), inset 0 0 15px rgba(255,255,255,0.8)`
+            : (isHovered || isSelected || (isTarget && isZooming))
+              ? `0 0 45px 12px ${node.glow}, inset 0 0 15px rgba(255,255,255,0.9)`
+              : `0 0 12px 1px ${node.glow}`
+        }}
+      />
+
+      <div ref={labelContainerRef} className="absolute bottom-full left-1/2 mb-4 flex flex-col items-center pointer-events-none">
+        <span 
+          ref={labelTextRef} 
+          className={`whitespace-nowrap text-[10px] sm:text-[11px] uppercase tracking-[0.25em] font-medium px-3 py-1.5 rounded-full border
+          ${(isHovered || isSelected) && !isZooming
+            ? 'text-white border-white/30 bg-white/10 backdrop-blur-md drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]'
+            : 'text-white/80 border-white/5 bg-[#020308]/60 backdrop-blur-md shadow-[0_4px_10px_rgba(0,0,0,0.5)]'}`}
+            style={{
+              transitionProperty: 'color, background-color, border-color, box-shadow',
+              transitionDuration: transitionDuration,
+              transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+        >
+          {node.chapter}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+
+// ----------------------------------------------------------------------
+// [MODULE 5: APP ORCHESTRATOR]
+// ----------------------------------------------------------------------
+
+export default function App() {
+  const { windowWidth, scale } = useWindowContext();
+  const isReducedMotion = useReducedMotion();
+  const { machineState, navigateTo, closeArticle } = useStoryMachine(APP_DATA, isReducedMotion);
+  
+  const [hoveredPlanet, setHoveredPlanet] = useState(null);
+  const [isUserPaused, setIsUserPaused] = useState(false);
+
+  const engineRef = useRef(null);
+  if (!engineRef.current) engineRef.current = new SolarPhysicsEngine(APP_DATA, CONFIG.TIMING, isReducedMotion);
+
+  const sceneRef = useRef(null);
+
+  useEffect(() => {
+    engineRef.current.updateContext({
+      isPaused: isUserPaused,
+      hoveredId: hoveredPlanet,
+      targetId: machineState.targetId,
+      activeId: machineState.activeId,
+      phase: machineState.phase
+    }, isReducedMotion);
+  }, [isUserPaused, hoveredPlanet, machineState, isReducedMotion]);
+
+  useEffect(() => {
+    engineRef.current.start();
+    const unsubscribe = engineRef.current.subscribeCamera((camX, camY) => {
+      if (sceneRef.current) sceneRef.current.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
+    });
+    return () => {
+      unsubscribe();
+      engineRef.current.stop();
+    };
+  }, []);
+
+  const getCameraTransitionDuration = () => {
+    if (isReducedMotion) return '1ms';
+    if (machineState.phase === 'pullback') return `${CONFIG.TIMING.PULLBACK_DURATION}ms`;
+    if (machineState.phase === 'pushin') return `${CONFIG.TIMING.PUSHIN_DURATION}ms`;
+    return `${CONFIG.TIMING.DEFAULT_TRANSITION}ms`;
+  };
+
+  const getCameraTransform = () => {
+    const { phase, activeId } = machineState;
+    const isMobile = windowWidth < CONFIG.LAYOUT.MD_BREAKPOINT;
+    
+    if (phase === 'pullback') return `scale(${scale * CONFIG.CAMERA.PULLBACK.scale}) rotateX(${CONFIG.CAMERA.PULLBACK.rotateX}deg) translateY(${CONFIG.CAMERA.PULLBACK.y}px)`; 
+    if (phase === 'pushin') return `scale(${scale * CONFIG.CAMERA.PUSHIN.scale}) rotateX(${CONFIG.CAMERA.PUSHIN.rotateX}deg) translateY(${CONFIG.CAMERA.PUSHIN.y}px)`; 
+    
+    if (activeId) {
+      if (isMobile) return `scale(${scale * CONFIG.CAMERA.MOBILE_ACTIVE.scale}) rotateX(${CONFIG.CAMERA.MOBILE_ACTIVE.rotateX}deg) translateY(${CONFIG.CAMERA.MOBILE_ACTIVE.y}vh)`;
+      const leftSpace = windowWidth - CONFIG.LAYOUT.PANEL_WIDTH;
+      const safeScale = Math.max(0.35, Math.min(scale * 0.65, (leftSpace - 40) / CONFIG.LAYOUT.SYS_MAX_SIZE));
+      return `scale(${safeScale}) rotateX(65deg) translateY(0px)`;
+    }
+    return `scale(${scale}) rotateX(${CONFIG.CAMERA.IDLE.rotateX}deg) translateY(0px)`;
+  };
+
+  return (
+    <EngineContext.Provider value={engineRef.current}>
+      <div className="w-full h-screen bg-[#020308] font-sans text-neutral-200 overflow-hidden relative selection:bg-neutral-800">
+        
+        <Background />
+        <Header />
+
+        <main 
+          className="absolute inset-0 flex items-center justify-center perspective-[1200px] ease-[cubic-bezier(0.16,1,0.3,1)]" 
+          style={{ 
+            transform: machineState.activeId && machineState.phase === 'idle' && windowWidth >= CONFIG.LAYOUT.MD_BREAKPOINT 
+              ? `translateX(-${CONFIG.LAYOUT.PANEL_WIDTH / 2}px)` 
+              : `translateX(0px)`,
+            transitionDuration: isReducedMotion ? '1ms' : `${CONFIG.TIMING.DEFAULT_TRANSITION}ms`,
+            transitionProperty: 'transform'
+          }}
+        >
+          <div 
+            className="relative preserve-3d will-change-transform"
+            style={{ 
+              width: 0, height: 0, 
+              transform: getCameraTransform(),
+              transition: `transform ${getCameraTransitionDuration()} cubic-bezier(0.65, 0, 0.35, 1)` 
+            }}
+          >
+            <div ref={sceneRef} className="absolute inset-0 preserve-3d will-change-transform">
+              {APP_DATA.filter(n => n.radius > 0).map((node) => (
+                <div
+                  key={`orbit-${node.id}`}
+                  className={`absolute top-0 left-0 rounded-full border border-white/[0.05] pointer-events-none transition-opacity ${
+                    machineState.targetId && machineState.phase === 'pushin' ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  style={{ 
+                    width: node.radius * 2, height: node.radius * 2, transform: `translate(-50%, -50%)`,
+                    transitionDuration: isReducedMotion ? '1ms' : '1000ms'
+                  }}
+                />
+              ))}
+
+              {APP_DATA.map((node) => (
+                <PlanetNode
+                  key={node.id}
+                  node={node}
+                  isHovered={hoveredPlanet === node.id}
+                  isSelected={machineState.activeId === node.id}
+                  isTarget={machineState.targetId === node.id}
+                  phase={machineState.phase}
+                  isReducedMotion={isReducedMotion}
+                  shouldBlur={machineState.targetId !== null && machineState.targetId !== node.id && machineState.phase === 'pushin'}
+                  onMouseEnter={setHoveredPlanet}
+                  onMouseLeave={() => setHoveredPlanet(null)}
+                  onNavigate={navigateTo}
+                />
+              ))}
+            </div>
+          </div>
+        </main>
+
+        <ArticlePanel 
+          activeId={machineState.activeId} 
+          isIdle={machineState.phase === 'idle'}
+          onNavigate={navigateTo}
+          onClose={closeArticle}
+          nodes={APP_DATA}
+          isReducedMotion={isReducedMotion}
+        />
+        
+        <PlayControls 
+          isUserPaused={isUserPaused} 
+          togglePause={() => setIsUserPaused(!isUserPaused)} 
+          isReducedMotion={isReducedMotion}
+        />
+
+      </div>
+    </EngineContext.Provider>
+  );
+}

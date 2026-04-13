@@ -1,0 +1,91 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { Navigation } from '@/components/layout/Navigation';
+import { Footer } from '@/components/layout/Footer';
+import { getPublishedWriting, getPrevNext, formatDateLong } from '@/lib/content';
+
+export async function getStaticPaths() {
+  const writingEntries = await getPublishedWriting();
+  return writingEntries.map(entry => ({
+    params: { slug: entry.slug }, props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const isMyStory = entry.data.seriesId === 'my-story';
+const newestFirst = isMyStory;
+const seriesHref = entry.data.seriesId ? `/series/${entry.data.seriesId}` : '/writing';
+const seriesLabel = isMyStory
+  ? '← 我的故事 / My Story'
+  : entry.data.seriesId
+    ? `← Series / ${entry.data.seriesId}`
+    : '← Writing';
+const articleClass = isMyStory
+  ? 'w-full max-w-[46rem] mx-auto px-5 md:px-6 pt-32 md:pt-40 pb-20 md:pb-24'
+  : 'w-full max-w-3xl mx-auto px-6 pt-48 pb-24';
+const bodyClass = isMyStory
+  ? 'max-w-none prose prose-invert prose-lg md:prose-xl prose-p:text-[#C8CAD1] prose-p:text-[1.08rem] md:prose-p:text-[1.16rem] prose-p:leading-[2.14] prose-p:tracking-[0.01em] prose-p:font-light prose-p:mb-8 prose-headings:text-[#F5F5F7] prose-headings:font-medium prose-headings:tracking-tight prose-headings:mt-14 prose-headings:mb-6 prose-a:text-white hover:prose-a:text-white/80 prose-blockquote:border-white/[0.1] prose-blockquote:text-[#9D9FA8] prose-blockquote:leading-[1.95] prose-strong:text-white prose-strong:font-medium prose-ul:text-[#C8CAD1] prose-li:leading-[2] prose-li:my-2 prose-img:rounded-xl prose-img:border prose-img:border-white/[0.08]'
+  : 'prose prose-invert prose-p:text-[#A1A1AA] prose-p:leading-[1.9] prose-p:font-light prose-headings:text-[#F5F5F7] prose-headings:font-medium prose-headings:tracking-tight prose-a:text-white hover:prose-a:text-white/80 prose-blockquote:border-white/[0.1] prose-blockquote:text-[#86868B] prose-strong:text-white prose-strong:font-medium max-w-none';
+
+const { prev: prevPost, next: nextPost } = await getPrevNext(entry, newestFirst ? 'newest' : 'oldest');
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.excerpt} ogImage={entry.data.ogImage ?? entry.data.coverImage} ogType="article" publishDate={entry.data.publishDate} updatedDate={entry.data.updatedDate}>
+  <Navigation client:idle />
+  
+  <article class={articleClass}>
+    <!-- ── Header ── -->
+    <header class={isMyStory ? 'mb-16 md:mb-20 border-b border-white/[0.05] pb-10 md:pb-14' : 'mb-16 border-b border-white/[0.05] pb-12'}>
+      {entry.data.seriesId && (
+        <a href={seriesHref} class="inline-block text-[10px] tracking-[0.25em] text-[#555555] uppercase mb-5 hover:text-white transition-colors">
+          {seriesLabel}
+        </a>
+      )}
+      <h1 class={isMyStory ? 'text-[2rem] md:text-[2.9rem] font-bold text-white tracking-[-0.04em] leading-[1.08] mb-5 md:mb-6' : 'text-3xl md:text-4xl font-bold text-white tracking-tighter leading-tight mb-5'}>{entry.data.title}</h1>
+      <div class="flex items-center gap-4">
+        {entry.data.publishDate && (
+          <time class={isMyStory ? 'text-[13px] md:text-sm font-light tracking-[0.14em] uppercase text-[#7E8089]' : 'text-sm font-light tracking-wide text-[#86868B]'}>
+            {formatDateLong(entry.data.publishDate)}
+          </time>
+        )}
+      </div>
+
+      {entry.data.coverImage && (
+        <div class={isMyStory ? 'mt-8 md:mt-10 overflow-hidden rounded-2xl border border-white/[0.08] aspect-[16/9] shadow-[0_24px_80px_rgba(0,0,0,0.28)]' : 'mt-8 overflow-hidden rounded-xl border border-white/[0.08] aspect-video'}>
+          <img
+            src={entry.data.coverImage}
+            alt={entry.data.title}
+            class="w-full h-full object-cover"
+            loading="eager"
+          />
+        </div>
+      )}
+    </header>
+
+    <!-- ── Body ── -->
+    <div class={bodyClass}>
+      <Content />
+    </div>
+
+    <!-- ── Prev / Next ── -->
+    {(prevPost || nextPost) && (
+      <nav class={isMyStory ? 'mt-20 md:mt-24 pt-10 md:pt-12 border-t border-white/[0.05] grid grid-cols-2 gap-6' : 'mt-24 pt-12 border-t border-white/[0.05] grid grid-cols-2 gap-6'}>
+        {prevPost ? (
+          <a href={`/writing/${prevPost.slug}`} class="group flex flex-col gap-1">
+            <span class="text-[10px] uppercase tracking-[0.25em] text-[#555555]">← {newestFirst ? 'Newer' : 'Previous'}</span>
+            <span class="text-sm text-[#A1A1AA] group-hover:text-white transition-colors font-medium tracking-tight">{prevPost.data.title}</span>
+          </a>
+        ) : <div />}
+        {nextPost ? (
+          <a href={`/writing/${nextPost.slug}`} class="group flex flex-col gap-1 text-right items-end">
+            <span class="text-[10px] uppercase tracking-[0.25em] text-[#555555]">{newestFirst ? 'Older' : 'Next'} →</span>
+            <span class="text-sm text-[#A1A1AA] group-hover:text-white transition-colors font-medium tracking-tight">{nextPost.data.title}</span>
+          </a>
+        ) : <div />}
+      </nav>
+    )}
+  </article>
+
+  <Footer />
+</BaseLayout>

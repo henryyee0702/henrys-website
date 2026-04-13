@@ -1,0 +1,289 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import * as THREE from 'three';
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
+
+// ==========================================
+// 1. 電磁場背景組件 (Electromagnetic Field)
+// ==========================================
+const ElectromagneticField = ({ mouseX, mouseY }) => {
+  const canvasRef = useRef(null);
+  const prefersReduced = useReducedMotion();
+
+  useEffect(() => {
+    if (prefersReduced || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+
+    let animationFrameId;
+    let cols = 0, rows = 0;
+    const spacing = 45; 
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cols = Math.floor(canvas.width / spacing) + 1;
+      rows = Math.floor(canvas.height / spacing) + 1;
+    };
+    window.addEventListener('resize', resize);
+    resize();
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const mx = mouseX.get();
+      const my = mouseY.get();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+
+      for (let i = 0; i <= cols; i++) {
+        for (let j = 0; j <= rows; j++) {
+          const cx = i * spacing;
+          const cy = j * spacing;
+          const dx = mx - cx;
+          const dy = my - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          const angle = Math.atan2(dy, dx);
+          const intensity = Math.max(0, 1 - dist / 600); 
+          const length = 4 + intensity * 20;
+
+          const p1x = cx - Math.cos(angle) * (length / 2);
+          const p1y = cy - Math.sin(angle) * (length / 2);
+          const p2x = cx + Math.cos(angle) * (length / 2);
+          const p2y = cy + Math.sin(angle) * (length / 2);
+
+          ctx.moveTo(p1x, p1y);
+          ctx.lineTo(p2x, p2y);
+        }
+      }
+      ctx.stroke();
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [mouseX, mouseY, prefersReduced]);
+
+  if (prefersReduced) return null;
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="fixed inset-0 pointer-events-none z-0 mix-blend-screen opacity-50" 
+      aria-hidden="true" 
+    />
+  );
+};
+
+// ==========================================
+// 2. 液態 Shader 組件 (Liquid Glass Shader)
+// ==========================================
+const HeroLiquidShader = ({ text, mouseX, mouseY }) => {
+  const containerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const isVisibleRef = useRef(true);
+  const hasMovedRef = useRef(false);
+
+  useEffect(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+    let reqId;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+    camera.position.z = 1;
+    
+    const renderer = new THREE.WebGLRenderer({ 
+      canvas: canvasRef.current, 
+      alpha: true, 
+      antialias: false, 
+      powerPreference: "high-performance" 
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+
+    // 建立文字 Texture
+    const textCanvas = document.createElement('canvas');
+    textCanvas.width = 2048; 
+    textCanvas.height = 512;
+    const ctx = textCanvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF'; 
+    ctx.textAlign = 'center'; 
+    ctx.textBaseline = 'middle';
+    
+    // 加強字體重量與大小以匹配原始圖片 (900 Weight, 200px)
+    ctx.font = `900 200px "PingFang TC", "Hiragino Sans GB", "Microsoft JhengHei", sans-serif`;
+    ctx.letterSpacing = "-4px"; // 緊湊的字距
+    ctx.fillText(text, textCanvas.width / 2, textCanvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(textCanvas);
+    texture.minFilter = THREE.LinearFilter;
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    
+    let currentMouse = new THREE.Vector2(0.5, 0.5);
+    let targetMouse = new THREE.Vector2(0.5, 0.5);
+    let velocity = 0;
+    let lastMouse = new THREE.Vector2(0.5, 0.5);
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tText;
+        uniform vec2 uResolution;
+        uniform vec2 uMouse;
+        uniform float uTime;
+        uniform float uVelocity;
+        varying vec2 vUv;
+
+        void main() {
+          vec2 uv = vUv;
+          vec2 aUv = vec2(uv.x * (uResolution.x / uResolution.y), uv.y);
+          vec2 aMouse = vec2(uMouse.x * (uResolution.x / uResolution.y), uMouse.y);
+          float dist = distance(aUv, aMouse);
+          
+          float baseRadius = 0.12 + (uVelocity * 0.15);
+          float ripple = sin(dist * 20.0 - uTime * 4.0) * 0.05 * smoothstep(baseRadius + 0.1, 0.0, dist);
+          float liquidMask = smoothstep(baseRadius + 0.25, 0.0, dist);
+          
+          vec2 refractUv = uv + normalize(aUv - aMouse) * liquidMask * 0.15 + vec2(ripple);
+          
+          float ca = liquidMask * 0.05 + (uVelocity * 0.02);
+          
+          float r = texture2D(tText, clamp(refractUv + vec2(ca, 0.0), 0.0, 1.0)).r;
+          float g = texture2D(tText, clamp(refractUv, 0.0, 1.0)).g;
+          float b = texture2D(tText, clamp(refractUv - vec2(ca, 0.0), 0.0, 1.0)).b;
+          float a = max(max(texture2D(tText, clamp(refractUv + vec2(ca, 0.0), 0.0, 1.0)).a, g), texture2D(tText, clamp(refractUv - vec2(ca, 0.0), 0.0, 1.0)).a);
+          
+          float spec = pow(liquidMask, 4.0) * 0.4 * a;
+          
+          gl_FragColor = vec4(vec3(r, g, b) + spec, a);
+        }
+      `,
+      uniforms: {
+        tText: { value: texture },
+        uResolution: { value: new THREE.Vector2() },
+        uMouse: { value: currentMouse },
+        uTime: { value: 0 },
+        uVelocity: { value: 0 }
+      },
+      transparent: true
+    });
+
+    scene.add(new THREE.Mesh(geometry, material));
+
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      const w = containerRef.current.clientWidth;
+      const h = containerRef.current.clientHeight;
+      renderer.setSize(w, h);
+      material.uniforms.uResolution.value.set(w, h);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    const clock = new THREE.Clock();
+    const renderLoop = () => {
+      reqId = requestAnimationFrame(renderLoop);
+      if (!isVisibleRef.current) return;
+
+      const t = clock.getElapsedTime();
+      const mX = mouseX.get();
+      const mY = mouseY.get();
+      
+      if (mX !== 0 || mY !== 0) {
+        hasMovedRef.current = true;
+      }
+      
+      if (containerRef.current && hasMovedRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        targetMouse.x = (mX - rect.left) / rect.width;
+        targetMouse.y = 1.0 - ((mY - rect.top) / rect.height);
+      }
+
+      currentMouse.lerp(targetMouse, 0.1);
+
+      if (hasMovedRef.current) {
+        const d = currentMouse.distanceTo(lastMouse);
+        velocity += (d - velocity) * 0.15;
+      }
+      
+      lastMouse.copy(currentMouse);
+
+      material.uniforms.uTime.value = t;
+      material.uniforms.uMouse.value.copy(currentMouse);
+      material.uniforms.uVelocity.value = velocity * 100.0;
+      renderer.render(scene, camera);
+    };
+    renderLoop();
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      window.removeEventListener('resize', handleResize);
+      geometry.dispose();
+      material.dispose();
+      texture.dispose();
+      renderer.dispose();
+    };
+  }, [text, mouseX, mouseY]);
+
+  return (
+    <div ref={containerRef} className="w-full max-w-[1400px] h-[50vh] relative flex justify-center items-center">
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+    </div>
+  );
+};
+
+// ==========================================
+// 3. 主應用程式 (Main App)
+// ==========================================
+export default function App() {
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      mouseX.set(e.clientX);
+      mouseY.set(e.clientY);
+    };
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [mouseX, mouseY]);
+
+  return (
+    <div className="min-h-screen bg-[#050505] text-[#F5F5F7] font-sans selection:bg-white/20 selection:text-white relative antialiased overflow-hidden flex flex-col">
+      
+      {/* 背景向量場 */}
+      <ElectromagneticField mouseX={mouseX} mouseY={mouseY} />
+
+      {/* 頂部導覽列 (字型加粗) */}
+      <nav className="fixed top-0 w-full z-50 px-8 py-8 flex justify-between items-center pointer-events-none">
+        <div className="font-black tracking-tighter text-2xl text-white pointer-events-auto">曾品翰</div>
+      </nav>
+
+      {/* Hero Section 核心內容 */}
+      <main className="relative z-10 flex-grow flex flex-col items-center justify-center px-6">
+        
+        {/* 液態文字特效 (更新字體尺寸與重量) */}
+        <HeroLiquidShader text="這不是作品集。" mouseX={mouseX} mouseY={mouseY} />
+
+      </main>
+
+      {/* 微弱的顆粒噪點遮罩 */}
+      <div 
+        className="pointer-events-none fixed inset-0 z-50 opacity-[0.03] mix-blend-overlay"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+    </div>
+  );
+}

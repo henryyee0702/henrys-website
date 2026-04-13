@@ -1,0 +1,32 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { Navigation } from '@/components/layout/Navigation';
+import { CustomCursor } from '@/components/ui/CustomCursor';
+import { NoiseOverlay } from '@/components/ui/NoiseOverlay';
+
+import { LiquidStatement } from '@/components/sections/LiquidStatement';
+import { HomepageShowreel } from '@/components/sections/HomepageShowreel';
+import { HonorsHero } from '@/components/sections/HonorsHero';
+import { AchievementTimeline } from '@/components/sections/AchievementTimeline';
+import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
+---
+
+<BaseLayout>
+  <link slot="head" rel="preload" as="image" href="https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_auto/v1775536380/frame-8-3_vuvv1l.png" />
+  <CustomCursor client:media="(pointer: fine) and (hover: hover) and (min-width: 1024px)" />
+  <NoiseOverlay />
+  <Navigation client:idle />
+
+  <main>
+    <HomepageShowreel />
+
+    <LiquidStatement client:visible />
+
+    <HonorsHero client:visible />
+
+    <AchievementTimeline client:visible />
+
+    <FulbrightGalaxy client:visible />
+
+  </main>
+</BaseLayout>

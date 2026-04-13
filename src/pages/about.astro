@@ -1,0 +1,199 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { Navigation } from '@/components/layout/Navigation';
+import { Footer } from '@/components/layout/Footer';
+import { CustomCursor } from '@/components/ui/CustomCursor';
+import { NoiseOverlay } from '@/components/ui/NoiseOverlay';
+---
+
+<BaseLayout title="關於曾品翰">
+  <CustomCursor client:media="(pointer: fine) and (hover: hover) and (min-width: 1024px)" />
+  <NoiseOverlay />
+  <Navigation client:idle />
+
+  <main class="w-full max-w-5xl mx-auto px-4 min-[394px]:max-[430px]:px-5 min-[768px]:max-[1024px]:px-8 md:px-6 pt-28 min-[394px]:max-[430px]:pt-32 min-[768px]:max-[1024px]:pt-40 lg:pt-48 pb-20 min-[768px]:max-[1024px]:pb-24">
+
+    <!-- ── Hero / Intro ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32 flex flex-col min-[768px]:max-[1024px]:flex-row md:flex-row gap-10 min-[768px]:max-[1024px]:gap-12 md:gap-16 items-start">
+      <div class="w-full max-w-[250px] min-[394px]:max-[430px]:max-w-[290px] min-[768px]:max-[1024px]:w-[280px] md:w-[280px] flex-shrink-0 mx-auto min-[768px]:max-[1024px]:mx-0 md:mx-0">
+        <div class="aspect-[3/4] w-full rounded-2xl overflow-hidden bg-white/5 border border-white/[0.08] relative">
+          <img src="https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_auto/v1774251566/IMG_6693_2_zbnzkh.jpg" alt="Pin-Han Tseng Portrait" class="object-cover w-full h-full" loading="eager" />
+        </div>
+      </div>
+      <div class="w-full md:flex-1">
+        <p class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-6">About</p>
+        <h1 class="text-[2rem] min-[394px]:max-[430px]:text-[2.3rem] min-[768px]:max-[1024px]:text-[3.25rem] md:text-5xl font-bold tracking-tighter text-white mb-8 md:mb-10 leading-[1.08]">
+          曾品翰<span class="block text-base min-[394px]:max-[430px]:text-lg min-[768px]:max-[1024px]:text-[1.15rem] md:text-xl font-light text-[#86868B] tracking-tight mt-2">Pin-Han Tseng — Henry</span>
+        </h1>
+        <blockquote class="text-[1.05rem] min-[394px]:max-[430px]:text-[1.15rem] min-[768px]:max-[1024px]:text-[1.4rem] md:text-2xl text-white/90 font-medium leading-relaxed tracking-tight mb-8 md:mb-10 border-l-2 border-white/[0.1] pl-4 min-[768px]:max-[1024px]:pl-5 md:pl-6">
+          「欸，曾品翰，你一個電機系的，Layout 畫完了嗎？」
+        </blockquote>
+      </div>
+    </section>
+
+    <!-- ── Personal Statement ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32 max-w-3xl">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-8">Statement</h2>
+      <div class="space-y-5 md:space-y-6 text-[#A1A1AA] font-light leading-[1.85] text-[15px] min-[768px]:max-[1024px]:text-base md:text-base">
+        <p>
+          我腦中那顆像 Windows 電腦一樣的風扇又開始狂轉，在 0.8V 低電壓下發出瀕臨極限的哀鳴。
+        </p>
+        <p>
+          我是 Henry，江湖人稱「中山派掌門人」。平時，我在 Cadence 的 16nm 世界裡與電晶體纏鬥，和一條條線路短兵相接；但骨子裡，卻始終流著電影人的熱血。曾憑一部《鹽埕的冰》在影壇江湖奪下金獎，也因此更相信：<span class="text-white font-normal">再冰冷的技術背後，都能藏著一個有溫度的故事。</span>
+        </p>
+        <p>
+          現在的我，一手背著 GRE，一手帶著 Fulbright 的武林帖，準備跨海闖蕩美國，走進 UCSD 的新江湖。
+        </p>
+        <p>
+          如果你看到一個身高 180 公分、背著相機、剛練完拳擊還在喘的男子，先別懷疑，那就是我。我總在科技與人文的邊界反覆橫跳，想做的事很簡單——<span class="text-white font-normal">在硬梆梆的矽晶片上，寫出最有溫度的故事。</span>
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Education ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Education</h2>
+      <div class="space-y-8 md:space-y-10">
+        <div class="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-8">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#86868B] tracking-wide">2022 – 2026</span>
+          </div>
+          <div>
+            <h3 class="text-lg font-medium text-white tracking-tight">國立中山大學 National Sun Yat-sen University</h3>
+            <p class="text-[#A1A1AA] font-light mt-1">電機工程學系 — B.S. in Electrical Engineering</p>
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-8">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#86868B] tracking-wide">2026 Summer</span>
+          </div>
+          <div>
+            <h3 class="text-lg font-medium text-white tracking-tight">UC San Diego — Summer Research</h3>
+            <p class="text-[#A1A1AA] font-light mt-1">Fulbright EMI Waiver Program scholar</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Awards & Honors ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Awards & Honors</h2>
+      <div class="space-y-5 md:space-y-6">
+        <div class="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-8 pb-6 border-b border-white/[0.05]">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#FFD60A] tracking-wide">Gold Award</span>
+          </div>
+          <div>
+            <h3 class="text-base font-medium text-white tracking-tight">中華民國微電影協會 — 金獎（AI 生成類）</h3>
+            <p class="text-sm text-[#86868B] font-light mt-1">《鹽埕的冰 The Melting Time》— Director / AI Artist</p>
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-8 pb-6 border-b border-white/[0.05]">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#86868B] tracking-wide">2026</span>
+          </div>
+          <div>
+            <h3 class="text-base font-medium text-white tracking-tight">Fulbright EMI Waiver Program</h3>
+            <p class="text-sm text-[#86868B] font-light mt-1">Selected for UCSD summer research placement</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Research & Engineering ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Research & Engineering</h2>
+      <div class="space-y-8 md:space-y-10">
+        <div class="flex flex-col md:flex-row gap-2 md:gap-8">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#86868B] tracking-wide">VLSI</span>
+          </div>
+          <div class="max-w-2xl">
+            <h3 class="text-base font-medium text-white tracking-tight mb-2">TSMC 16nm ADFP Simulation</h3>
+            <p class="text-[#A1A1AA] font-light leading-relaxed text-sm">
+              Cadence Virtuoso 環境下進行先進製程 Layout 設計與模擬，經歷完整的 IC 設計流程——從電路設計、佈局到寄生參數萃取與驗證。
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row gap-2 md:gap-8">
+          <div class="md:w-40 flex-shrink-0">
+            <span class="text-xs text-[#86868B] tracking-wide">Film / AI</span>
+          </div>
+          <div class="max-w-2xl">
+            <h3 class="text-base font-medium text-white tracking-tight mb-2">AI-driven Visual Storytelling</h3>
+            <p class="text-[#A1A1AA] font-light leading-relaxed text-sm">
+              結合機器學習影像生成技術與傳統敘事結構，探索 AI 工具在電影製作中的可能性。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Leadership ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Leadership</h2>
+      <div class="flex flex-col md:flex-row gap-2 md:gap-8">
+        <div class="md:w-40 flex-shrink-0">
+          <span class="text-xs text-[#86868B] tracking-wide">Club</span>
+        </div>
+        <div class="max-w-2xl">
+          <h3 class="text-base font-medium text-white tracking-tight mb-2">中山大學慢跑社 — 社長</h3>
+          <p class="text-[#A1A1AA] font-light leading-relaxed text-sm">
+            帶領社團完成年度規劃、跨校聯合路跑，以及不計其數的清晨「痛苦指數爆表」晨跑。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── International ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">International</h2>
+      <div class="max-w-3xl space-y-5 md:space-y-6 text-[#A1A1AA] font-light leading-[1.85] text-[14px] min-[768px]:max-[1024px]:text-[15px] md:text-sm">
+        <p>
+          2026 年夏天，我將以 Fulbright EMI Waiver Program 學者身分前往加州大學聖地牙哥分校（UCSD）進行暑期研究，踏入新的學術舞台。這趟旅程不只是技術的延伸，也是視野與思維方式的重新校準。
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Visual Narratives / YouTube ── -->
+    <section class="mb-20 min-[768px]:max-[1024px]:mb-24 lg:mb-32">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Visual Narratives</h2>
+      <div class="grid grid-cols-1 min-[768px]:max-[1024px]:grid-cols-2 md:grid-cols-2 gap-5 md:gap-6">
+        <div class="group">
+          <div class="aspect-video bg-white/[0.03] rounded-xl border border-white/[0.06] overflow-hidden relative interactive-node">
+            <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/Y8iDLKpGkFo" title="我花了一整年拍了這部片..." style="border: 0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <p class="text-xs text-[#86868B] mt-3 tracking-wide">我花了一整年拍了這部片...</p>
+        </div>
+        <div class="group">
+          <div class="aspect-video bg-white/[0.03] rounded-xl border border-white/[0.06] overflow-hidden relative interactive-node">
+            <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/33BUP8Q1QI8" title="金門，請回答" style="border: 0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <p class="text-xs text-[#86868B] mt-3 tracking-wide">金門，請回答</p>
+        </div>
+        <div class="group">
+          <div class="aspect-video bg-white/[0.03] rounded-xl border border-white/[0.06] overflow-hidden relative interactive-node">
+            <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/0Sv7eQJOv24" title="尋找" style="border: 0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <p class="text-xs text-[#86868B] mt-3 tracking-wide">尋找</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Contact ── -->
+    <section class="mb-10 md:mb-16">
+      <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-10">Contact</h2>
+      <div class="flex flex-col sm:flex-row gap-4 sm:gap-6">
+        <a href="mailto:henry930702@gmail.com" class="text-[13px] md:text-sm text-[#A1A1AA] hover:text-white transition-colors tracking-wide interactive-node break-all">
+          henry930702@gmail.com
+        </a>
+        <a href="https://www.linkedin.com/in/pin-han-tseng/" target="_blank" rel="noopener noreferrer" class="text-[13px] md:text-sm text-[#A1A1AA] hover:text-white transition-colors tracking-wide interactive-node">
+          LinkedIn ↗
+        </a>
+      </div>
+    </section>
+
+  </main>
+  
+  <Footer />
+</BaseLayout>
