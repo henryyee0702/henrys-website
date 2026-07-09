@@ -1,5 +1,4 @@
 import { defineConfig } from 'astro/config';
-import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +10,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   site: process.env.SITE_URL || 'https://pinhantseng.com',
   integrations: [
-    tailwind(),
     react(),
     sitemap({
       filter: (page) =>

@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
@@ -9,18 +9,18 @@ import { getSeriesPosts, toStoryFeedItems, formatDateShort, getDayLabel } from '
 export async function getStaticPaths() {
   const seriesEntries = await getCollection('series');
   return seriesEntries.map(entry => ({
-    params: { slug: entry.slug }, props: { entry },
+    params: { slug: entry.id }, props: { entry },
   }));
 }
 
 const { entry } = Astro.props;
-const { Content } = await entry.render();
-const isMyStorySeries = entry.slug === 'my-story';
+const { Content } = await render(entry);
+const isMyStorySeries = entry.id === 'my-story';
 const order = isMyStorySeries ? 'newest' : 'oldest';
 const backHref = isMyStorySeries ? '/' : '/writing';
 const backLabel = isMyStorySeries ? '← Home / My Story' : '← Writing';
 
-const seriesPosts = await getSeriesPosts(entry.slug, order);
+const seriesPosts = await getSeriesPosts(entry.id, order);
 const mainClass = isMyStorySeries
   ? 'w-full max-w-5xl mx-auto px-5 md:px-6 pt-32 md:pt-40 pb-20 md:pb-24'
   : 'w-full max-w-3xl mx-auto px-6 pt-48 pb-24';
@@ -59,7 +59,7 @@ const myStorySeriesItems = toStoryFeedItems(seriesPosts, formatDateShort);
         ) : (
           <div class="flex flex-col">
             {seriesPosts.map((post, i) => (
-              <a href={`/writing/${post.slug}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-5 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
+              <a href={`/writing/${post.id}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-5 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
                 <span class="text-xs text-[#555555] tracking-wide flex-shrink-0 sm:w-16 tabular-nums font-medium">
                   {isMyStorySeries ? getDayLabel(post.data.title) : String(i + 1).padStart(2, '0')}
                 </span>

@@ -4,6 +4,7 @@ import { gsap } from 'gsap';
 import { ElectromagneticField } from '@/components/webgl/ElectromagneticField';
 import { HeroLiquidShader } from '@/components/webgl/HeroLiquidShader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useGpuTier } from '@/components/webgl/gpu-tier';
 
 const STATEMENT_EN_SUBTITLE = 'Engineer and artist';
 const ENGINEER_WORD = '工程師';
@@ -379,6 +380,9 @@ export const LiquidStatement: React.FC = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
+  const gpu = useGpuTier();
+  const reducedEffects = reducedMotion || coarsePointer || gpu.tier === 'fallback';
 
   const handleMouseMove = (e: React.MouseEvent) => {
     mouseX.set(e.clientX);
@@ -389,11 +393,11 @@ export const LiquidStatement: React.FC = () => {
     <section
       ref={sectionRef}
       id="liquid-statement"
-      className="relative w-full min-h-[58vh] min-[394px]:max-[430px]:min-h-[64vh] min-[768px]:max-[1024px]:min-h-[72vh] lg:min-h-[84vh] overflow-hidden border-y border-white/[0.05] bg-[#050505]"
-      onMouseMove={handleMouseMove}
+      className="relative w-full min-h-[58vh] scroll-mt-[8.5rem] min-[394px]:max-[430px]:min-h-[64vh] min-[768px]:max-[1024px]:min-h-[72vh] lg:min-h-[84vh] overflow-hidden border-y border-white/[0.05] bg-[#050505]"
+      onMouseMove={reducedEffects ? undefined : handleMouseMove}
     >
       <ElectromagneticField mouseX={mouseX} mouseY={mouseY} />
-      <div className="relative z-10 mx-auto flex w-full max-w-[1540px] flex-col gap-12 px-4 py-12 min-[394px]:max-[430px]:gap-14 min-[394px]:max-[430px]:px-5 min-[394px]:max-[430px]:py-14 min-[768px]:max-[1024px]:gap-16 min-[768px]:max-[1024px]:px-8 min-[768px]:max-[1024px]:py-16 md:px-6 md:py-16 lg:gap-20 lg:px-10 lg:py-20">
+      <div className="relative z-10 mx-auto flex w-full max-w-[1540px] flex-col gap-12 px-4 py-8 min-[394px]:max-[430px]:gap-14 min-[394px]:max-[430px]:px-5 min-[394px]:max-[430px]:py-10 min-[768px]:max-[1024px]:gap-16 min-[768px]:max-[1024px]:px-8 min-[768px]:max-[1024px]:py-16 md:px-6 md:py-16 lg:gap-20 lg:px-10 lg:py-20">
         <div className="relative flex w-full max-w-[1400px] justify-center overflow-visible">
           <div
             data-identity-stack
@@ -415,7 +419,7 @@ export const LiquidStatement: React.FC = () => {
             <div className="space-y-3 min-[768px]:max-[1024px]:space-y-4 md:space-y-[1.125rem]">
               <p data-statement-title className="flex flex-wrap items-baseline justify-center gap-x-[0.18em] gap-y-2 text-center text-[clamp(2.3rem,5vw,4.9rem)] leading-[0.95] text-[#F5F5F7]">
                 <span className="inline-flex overflow-visible pb-[0.14em] pr-[0.02em]">
-                  <EngineerElectricWord reducedMotion={reducedMotion} wordClassName={WORD_CLASS} />
+                  <EngineerElectricWord reducedMotion={reducedEffects} wordClassName={WORD_CLASS} />
                 </span>
                 <span className="inline-flex overflow-visible pb-[0.14em] pr-[0.02em]">
                   <span className={WORD_CLASS}>與</span>
@@ -423,7 +427,7 @@ export const LiquidStatement: React.FC = () => {
                 <span className="inline-flex overflow-visible pb-[0.14em] pr-[0.02em]">
                   <ArtistLiquidWord
                     word="藝術家"
-                    reducedMotion={reducedMotion}
+                    reducedMotion={reducedEffects}
                     mouseX={mouseX}
                     mouseY={mouseY}
                     wordClassName={WORD_CLASS}

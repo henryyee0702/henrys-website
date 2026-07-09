@@ -26,6 +26,7 @@ const CONFIG = {
     PULLBACK: { scale: 0.35, rotateX: 35, y: -200 },
     PUSHIN: { scale: 2.2, rotateX: 80, y: 100 },
     IDLE: { scale: 1, rotateX: 75, y: 0 },
+    MOBILE_IDLE: { minScale: 0.56, maxScale: 0.72, scaleMultiplier: 1.42, rotateX: 68, y: -42 },
     MOBILE_ACTIVE: { scale: 0.4, rotateX: 55, y: -20 },
   },
   LAYOUT: {
@@ -87,12 +88,12 @@ const INITIAL_PHYSICAL_SCALE: Record<string, number> = {};
 const INITIAL_PHYSICAL_LABEL_Y: Record<string, number> = {};
 const INITIAL_PHYSICAL_LABEL_SCALE: Record<string, number> = {};
 const INITIAL_ANGLES: Record<string, number> = {};
-for (const node of EPISODES) {
+for (const [index, node] of EPISODES.entries()) {
   INITIAL_PHYSICAL_Z[node.id] = 0;
   INITIAL_PHYSICAL_SCALE[node.id] = 1;
   INITIAL_PHYSICAL_LABEL_Y[node.id] = 0;
   INITIAL_PHYSICAL_LABEL_SCALE[node.id] = 1;
-  INITIAL_ANGLES[node.id] = node.isSun ? 0 : Math.random() * Math.PI * 2;
+  INITIAL_ANGLES[node.id] = node.isSun ? 0 : ((index * 137.508) % 360) * (Math.PI / 180);
 }
 
 // ==========================================
@@ -197,6 +198,7 @@ interface PlanetNodeProps {
   isTarget: boolean;
   isZooming: boolean;
   shouldBlur: boolean;
+  lowPower: boolean;
   onMouseEnter: (id: string) => void;
   onMouseLeave: () => void;
   onSelect: (node: EpisodeNode) => void;
@@ -210,7 +212,7 @@ interface PlanetNodeHandle {
 }
 
 const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
-  node, isHovered, isSelected, isTarget, isZooming, shouldBlur, onMouseEnter, onMouseLeave, onSelect,
+  node, isHovered, isSelected, isTarget, isZooming, shouldBlur, lowPower, onMouseEnter, onMouseLeave, onSelect,
 }, ref) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -226,6 +228,30 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
 
   const { prefix } = parseTitle(node.title);
   const transitionDuration = isZooming ? `${CONFIG.TIMING.PULLBACK_DURATION}ms` : `${CONFIG.TIMING.DEFAULT_TRANSITION}ms`;
+  const activeNode = isHovered || isSelected || (isTarget && isZooming);
+  const bodyShadow = node.isSun
+    ? lowPower
+      ? `0 0 24px 6px ${node.glow}, inset 0 0 12px rgba(255,255,255,0.65)`
+      : `0 0 40px 10px ${node.glow}, 0 0 80px 30px rgba(249, 115, 22, 0.2), inset 0 0 15px rgba(255,255,255,0.8)`
+    : activeNode
+      ? lowPower
+        ? `0 0 24px 6px ${node.glow}, inset 0 0 10px rgba(255,255,255,0.72)`
+        : `0 0 45px 12px ${node.glow}, inset 0 0 15px rgba(255,255,255,0.9)`
+      : lowPower
+        ? `0 0 8px 1px ${node.glow}`
+        : `0 0 12px 1px ${node.glow}`;
+  const blurClass = shouldBlur
+    ? lowPower
+      ? 'opacity-[0.18] pointer-events-none'
+      : 'opacity-10 blur-md pointer-events-none'
+    : 'opacity-100 blur-0';
+  const labelSurfaceClass = activeNode && !isZooming
+    ? lowPower
+      ? 'text-white border-white/24 bg-white/12 shadow-[0_6px_18px_rgba(255,255,255,0.16)]'
+      : 'text-white border-white/30 bg-white/10 backdrop-blur-md drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]'
+    : lowPower
+      ? 'text-white/82 border-white/10 bg-[#020308]/82 shadow-[0_4px_10px_rgba(0,0,0,0.45)]'
+      : 'text-white/80 border-white/5 bg-[#020308]/60 backdrop-blur-md shadow-[0_4px_10px_rgba(0,0,0,0.5)]';
 
   return (
     <div
@@ -235,7 +261,7 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
       aria-label={`檢視故事: ${node.title}`}
       className={`absolute top-0 left-0 preserve-3d cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:rounded-full
         ${!node.isSun ? 'will-change-transform' : ''}
-        ${shouldBlur ? 'opacity-10 blur-md pointer-events-none' : 'opacity-100 blur-0'}`}
+        ${blurClass}`}
       onMouseEnter={() => !isZooming && onMouseEnter(node.id)}
       onMouseLeave={() => !isZooming && onMouseLeave()}
       onClick={() => !isZooming && onSelect(node)}
@@ -251,14 +277,14 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
         transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
       }}
     >
-      {node.isSun && (
+      {node.isSun && !lowPower && (
         <>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[160%] rounded-full animate-pulse bg-orange-400/20 blur-[15px] pointer-events-none" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] rounded-full bg-yellow-300/10 blur-[30px] pointer-events-none" />
         </>
       )}
 
-      {node.hasRing && (
+      {node.hasRing && !lowPower && (
         <div
           className="absolute top-1/2 left-1/2 rounded-full border-[1px] border-yellow-200/30"
           style={{
@@ -279,11 +305,7 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
           transitionProperty: 'box-shadow',
           transitionDuration,
           transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-          boxShadow: node.isSun
-            ? `0 0 40px 10px ${node.glow}, 0 0 80px 30px rgba(249, 115, 22, 0.2), inset 0 0 15px rgba(255,255,255,0.8)`
-            : (isHovered || isSelected || (isTarget && isZooming))
-              ? `0 0 45px 12px ${node.glow}, inset 0 0 15px rgba(255,255,255,0.9)`
-              : `0 0 12px 1px ${node.glow}`,
+          boxShadow: bodyShadow,
         }}
       />
 
@@ -291,9 +313,7 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
         <span
           ref={labelTextRef}
           className={`whitespace-nowrap text-[10px] sm:text-[11px] uppercase tracking-[0.25em] font-medium px-3 py-1.5 rounded-full border
-            ${(isHovered || isSelected) && !isZooming
-              ? 'text-white border-white/30 bg-white/10 backdrop-blur-md drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-              : 'text-white/80 border-white/5 bg-[#020308]/60 backdrop-blur-md shadow-[0_4px_10px_rgba(0,0,0,0.5)]'}`}
+            ${labelSurfaceClass}`}
           style={{
             transitionProperty: 'color, background-color, border-color, box-shadow',
             transitionDuration,
@@ -326,11 +346,14 @@ export const FulbrightGalaxy: React.FC = () => {
 
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [isUserPaused, setIsUserPaused] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  const [windowWidth, setWindowWidth] = useState(1200);
   const [scale, setScale] = useState(1);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const lowPower = windowWidth < CONFIG.LAYOUT.MD_BREAKPOINT || isCoarsePointer;
 
   const planetRefs = useRef<Record<string, PlanetNodeHandle | null>>({});
+  const sectionRef = useRef<HTMLElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const cameraWrapperRef = useRef<HTMLDivElement>(null);
   const scrollPanelRef = useRef<HTMLDivElement>(null);
@@ -415,8 +438,35 @@ export const FulbrightGalaxy: React.FC = () => {
     if (reducedMotion) return;
     let reqId: number;
     let lastTime = performance.now();
+    let lastRenderTime = 0;
+    let isSectionVisible = true;
+    const minFrameMs = lowPower ? 1000 / 30 : 1000 / 60;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isSectionVisible = entry.isIntersecting;
+      },
+      { rootMargin: '180px' },
+    );
+
+    const section = sectionRef.current;
+    if (section) {
+      observer.observe(section);
+    }
 
     const loop = (timestamp: number) => {
+      if (!isSectionVisible || document.hidden) {
+        lastTime = timestamp;
+        reqId = requestAnimationFrame(loop);
+        return;
+      }
+
+      if (timestamp - lastRenderTime < minFrameMs) {
+        reqId = requestAnimationFrame(loop);
+        return;
+      }
+
+      lastRenderTime = timestamp;
       let deltaTime = timestamp - lastTime;
       lastTime = timestamp;
       if (deltaTime > 100) deltaTime = 16.666;
@@ -496,8 +546,11 @@ export const FulbrightGalaxy: React.FC = () => {
     };
 
     reqId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(reqId);
-  }, [reducedMotion]);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(reqId);
+    };
+  }, [lowPower, reducedMotion]);
 
   const handleNextArticle = (nextArticle: EpisodeNode) => {
     if (machineState.phase !== 'idle') return;
@@ -528,6 +581,14 @@ export const FulbrightGalaxy: React.FC = () => {
       return `scale(${safeScale}) rotateX(65deg) translateY(0px)`;
     }
 
+    if (isMobile) {
+      const mobileScale = Math.min(
+        CONFIG.CAMERA.MOBILE_IDLE.maxScale,
+        Math.max(CONFIG.CAMERA.MOBILE_IDLE.minScale, scale * CONFIG.CAMERA.MOBILE_IDLE.scaleMultiplier),
+      );
+      return `scale(${mobileScale}) rotateX(${CONFIG.CAMERA.MOBILE_IDLE.rotateX}deg) translateY(${CONFIG.CAMERA.MOBILE_IDLE.y}px)`;
+    }
+
     return `scale(${scale}) rotateX(${CONFIG.CAMERA.IDLE.rotateX}deg) translateY(0px)`;
   };
 
@@ -535,7 +596,7 @@ export const FulbrightGalaxy: React.FC = () => {
   const nextArticleNode = currentIndex >= 0 && currentIndex < EPISODES.length - 1 ? EPISODES[currentIndex + 1] : null;
 
   return (
-    <section id="fulbright-galaxy" className="relative h-screen overflow-hidden border-y border-white/[0.05] bg-[#020308]">
+    <section ref={sectionRef} id="fulbright-galaxy" className="relative h-[100svh] overflow-hidden border-y border-white/[0.05] bg-[#020308] md:h-screen">
       <style>{`
         .preserve-3d { transform-style: preserve-3d; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -546,10 +607,12 @@ export const FulbrightGalaxy: React.FC = () => {
 
       {/* Background layers */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02)_0%,transparent_80%)] pointer-events-none" />
-      <div className="absolute inset-0 pointer-events-none mix-blend-color-dodge opacity-40" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E")` }} />
+      {!lowPower && (
+        <div className="absolute inset-0 pointer-events-none mix-blend-color-dodge opacity-40" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E")` }} />
+      )}
 
       {/* Header */}
-      <header className="absolute top-6 left-6 md:top-8 md:left-10 z-20 pointer-events-none">
+      <header className="absolute left-6 top-[9.25rem] z-20 pointer-events-none md:left-10 md:top-8">
         <h2 className="text-xl md:text-2xl font-light tracking-[0.3em] text-white/90 drop-shadow-lg">
           FULBRIGHT<span className="text-white/40">DIARY</span>
         </h2>
@@ -580,7 +643,7 @@ export const FulbrightGalaxy: React.FC = () => {
         >
           <div ref={sceneRef} className="absolute inset-0 preserve-3d will-change-transform">
             {/* Orbit rings */}
-            {EPISODES.filter((n) => !n.isSun).map((node) => (
+            {!lowPower && EPISODES.filter((n) => !n.isSun).map((node) => (
               <div
                 key={`orbit-${node.id}`}
                 className={`absolute top-0 left-0 rounded-full border border-white/15 pointer-events-none transition-opacity duration-1000 ${
@@ -605,6 +668,7 @@ export const FulbrightGalaxy: React.FC = () => {
                 isTarget={machineState.targetId === node.id}
                 isZooming={machineState.phase !== 'idle'}
                 shouldBlur={machineState.targetId !== null && machineState.targetId !== node.id && machineState.phase === 'pushin'}
+                lowPower={lowPower}
                 onMouseEnter={setHoveredPlanet}
                 onMouseLeave={() => setHoveredPlanet(null)}
                 onSelect={(n) => setMachineState((prev) => ({ ...prev, activeArticle: n }))}

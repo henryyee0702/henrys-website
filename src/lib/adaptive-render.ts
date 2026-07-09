@@ -28,13 +28,19 @@ export class IdleTracker {
 /**
  * Returns true when the current frame should be skipped.
  * - Always skips while `document.hidden` (tab in background).
- * - When idle, renders only every 4th frame (~15 fps).
+ * - Supports separate active/idle frame intervals for low-power effects.
  */
 export function shouldThrottleFrame(
   frameCount: number,
   isIdle: boolean,
+  options: {
+    activeFrameInterval?: number;
+    idleFrameInterval?: number;
+  } = {},
 ): boolean {
   if (typeof document !== 'undefined' && document.hidden) return true;
-  if (isIdle) return frameCount % 4 !== 0;
-  return false;
+  const activeFrameInterval = Math.max(1, options.activeFrameInterval ?? 1);
+  const idleFrameInterval = Math.max(activeFrameInterval, options.idleFrameInterval ?? 4);
+  const interval = isIdle ? idleFrameInterval : activeFrameInterval;
+  return interval > 1 && frameCount % interval !== 0;
 }

@@ -8,7 +8,7 @@ import { getPublishedWriting, groupBySeries, formatDateShort } from '@/lib/conte
 const allWriting = await getPublishedWriting();
 const allSeries = await getCollection('series');
 const { seriesMap } = groupBySeries(allWriting);
-const activeSeries = allSeries.filter(s => (seriesMap.get(s.slug)?.length ?? 0) > 0);
+const activeSeries = allSeries.filter(s => (seriesMap.get(s.id)?.length ?? 0) > 0);
 ---
 
 <BaseLayout title="Writing">
@@ -27,9 +27,9 @@ const activeSeries = allSeries.filter(s => (seriesMap.get(s.slug)?.length ?? 0) 
         <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-8">Series</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {activeSeries.map(series => {
-            const count = seriesMap.get(series.slug)?.length || 0;
+            const count = seriesMap.get(series.id)?.length || 0;
             return (
-              <a href={`/series/${series.slug}`} class="group block p-6 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300">
+              <a href={`/series/${series.id}`} class="group block p-6 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300">
                 <h3 class="text-base font-medium text-[#F5F5F7] group-hover:text-white transition-colors tracking-tight mb-2">{series.data.title}</h3>
                 <p class="text-sm text-[#86868B] font-light leading-relaxed mb-3 line-clamp-2">{series.data.description}</p>
                 <span class="text-[10px] uppercase tracking-widest text-[#555555]">{count} {count === 1 ? 'entry' : 'entries'}</span>
@@ -45,7 +45,7 @@ const activeSeries = allSeries.filter(s => (seriesMap.get(s.slug)?.length ?? 0) 
       <h2 class="text-[10px] uppercase tracking-[0.25em] text-[#555555] mb-8">All Articles</h2>
       <div class="flex flex-col">
         {allWriting.map((post) => (
-          <a href={`/writing/${post.slug}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-6 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
+          <a href={`/writing/${post.id}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-6 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
             <time class="text-xs text-[#555555] tracking-wide flex-shrink-0 sm:w-28 tabular-nums">
               {formatDateShort(post.data.publishDate)}
             </time>

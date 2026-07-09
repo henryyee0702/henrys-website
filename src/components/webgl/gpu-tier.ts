@@ -42,7 +42,7 @@ const PROFILES: Record<GpuTier, GpuProfile> = {
   },
   reduced: {
     tier: 'reduced',
-    maxDpr: 1,
+    maxDpr: 1.4,
     shadowMapSize: 512,
     maxLights: 2,
     enablePostProcessing: false,
@@ -126,7 +126,7 @@ export function detectGpuTier(): GpuProfile {
  */
 export function adaptCloudinaryUrl(url: string, tier: GpuTier): string {
   if (tier === 'full') return url;
-  const maxWidth = tier === 'reduced' ? 1024 : 512;
+  const maxWidth = tier === 'reduced' ? 1280 : 1024;
   return url.replace(
     /(\/upload\/)((?:[^/]+\/)*)(?=v\d)/,
     (_, upload: string, transforms: string) => {

@@ -5,14 +5,14 @@ import { CustomCursor } from '@/components/ui/CustomCursor';
 import { NoiseOverlay } from '@/components/ui/NoiseOverlay';
 
 import { LiquidStatement } from '@/components/sections/LiquidStatement';
-import { HomepageShowreel } from '@/components/sections/HomepageShowreel';
+import { HomepageShowreel, HOMEPAGE_SHOWREEL_POSTER_SRC } from '@/components/sections/HomepageShowreel';
 import { HonorsHero } from '@/components/sections/HonorsHero';
 import { AchievementTimeline } from '@/components/sections/AchievementTimeline';
 import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
 ---
 
 <BaseLayout>
-  <link slot="head" rel="preload" as="image" href="https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_auto/v1775536380/frame-8-3_vuvv1l.png" />
+  <link slot="head" rel="preload" as="image" href={HOMEPAGE_SHOWREEL_POSTER_SRC} />
   <CustomCursor client:media="(pointer: fine) and (hover: hover) and (min-width: 1024px)" />
   <NoiseOverlay />
   <Navigation client:idle />
@@ -29,4 +29,37 @@ import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
     <FulbrightGalaxy client:visible />
 
   </main>
+
+  <script>
+    const showreelVideo = document.querySelector<HTMLVideoElement>('[data-homepage-showreel-video]');
+
+    if (showreelVideo) {
+      let isVisible = true;
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const syncPlayback = () => {
+        if (document.hidden || !isVisible || prefersReducedMotion.matches) {
+          showreelVideo.pause();
+          return;
+        }
+
+        void showreelVideo.play().catch(() => {});
+      };
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(
+          ([entry]) => {
+            isVisible = Boolean(entry?.isIntersecting) && (entry?.intersectionRatio ?? 0) > 0.12;
+            syncPlayback();
+          },
+          { threshold: [0, 0.12, 0.5], rootMargin: '96px 0px' },
+        );
+
+        observer.observe(showreelVideo);
+      }
+
+      document.addEventListener('visibilitychange', syncPlayback);
+      window.addEventListener('pagehide', () => showreelVideo.pause(), { once: true });
+      syncPlayback();
+    }
+  </script>
 </BaseLayout>

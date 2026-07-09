@@ -20,6 +20,29 @@ const SITE_NAME = '曾品翰 | Pin-Han Tseng';
 const DEFAULT_DESCRIPTION = 'Engineering discipline meets visual storytelling.';
 const DEFAULT_OG = '/og-default.png';
 
+const isHttpUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const toAbsoluteSiteUrl = (value: string | undefined) => {
+  if (!value) return undefined;
+
+  if (isHttpUrl(value)) {
+    return value;
+  }
+
+  if (value.startsWith('/') && !value.startsWith('//') && Astro.site) {
+    return new URL(value, Astro.site).href;
+  }
+
+  return undefined;
+};
+
 const {
   title,
   description = DEFAULT_DESCRIPTION,
@@ -32,12 +55,12 @@ const {
 
 const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
 
-// Resolve canonical: explicit prop > auto from current URL
-const resolvedCanonical = canonical ?? (Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined);
+// Resolve canonical: explicit prop > auto from current URL.
+const resolvedCanonical = toAbsoluteSiteUrl(canonical) ?? (Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined);
 
 // Resolve OG image to absolute URL for social platforms
 const rawOg = ogImage ?? DEFAULT_OG;
-const resolvedOg = rawOg.startsWith('http') ? rawOg : (Astro.site ? new URL(rawOg, Astro.site).href : rawOg);
+const resolvedOg = toAbsoluteSiteUrl(rawOg) ?? (Astro.site ? new URL(DEFAULT_OG, Astro.site).href : DEFAULT_OG);
 ---
 
 <!-- Primary -->
@@ -45,6 +68,7 @@ const resolvedOg = rawOg.startsWith('http') ? rawOg : (Astro.site ? new URL(rawO
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content={description} />
 <meta name="theme-color" content="#050505" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
 <title>{pageTitle}</title>
 
 <!-- Open Graph -->

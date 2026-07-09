@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { type MotionValue } from 'framer-motion';
 import { IdleTracker, shouldThrottleFrame } from '@/lib/adaptive-render';
+import { detectGpuTier } from '@/components/webgl/gpu-tier';
 
 interface HeroLiquidShaderProps {
   text: string;
@@ -33,6 +34,10 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
     let reqId: number;
+    const gpu = detectGpuTier();
+    const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const reducedBudget = gpu.tier !== 'full' || isCoarsePointer;
+    const maxDpr = reducedBudget ? (variant === 'inline' ? 1.15 : 1) : (variant === 'inline' ? 2 : 1.5);
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
@@ -44,7 +49,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
       antialias: false, 
       powerPreference: "high-performance" 
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, variant === 'inline' ? 3 : 1.5)); 
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr)); 
 
     const textCanvas = document.createElement('canvas');
     const ctx = textCanvas.getContext('2d');
@@ -53,7 +58,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.generateMipmaps = false;
-    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.anisotropy = Math.min(reducedBudget ? 2 : 6, renderer.capabilities.getMaxAnisotropy());
     const geometry = new THREE.PlaneGeometry(2, 2);
     
     const currentMouse = new THREE.Vector2(-10, -10);
@@ -118,11 +123,11 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
         uVelocity: { value: 0 },
         uBaseRadius: { value: 0.12 },
         uVelocityRadius: { value: 0.15 },
-        uRippleStrength: { value: 0.05 },
-        uDistortionStrength: { value: 0.15 },
-        uChromaticStrength: { value: 0.05 },
-        uVelocityChromaticStrength: { value: 0.02 },
-        uSpecularStrength: { value: 0.4 },
+        uRippleStrength: { value: reducedBudget ? 0.025 : 0.05 },
+        uDistortionStrength: { value: reducedBudget ? 0.08 : 0.15 },
+        uChromaticStrength: { value: reducedBudget ? 0.024 : 0.05 },
+        uVelocityChromaticStrength: { value: reducedBudget ? 0.01 : 0.02 },
+        uSpecularStrength: { value: reducedBudget ? 0.24 : 0.4 },
       },
       transparent: true
     });
@@ -134,9 +139,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
 
       if (fitToContainer) {
         const styles = window.getComputedStyle(containerRef.current);
-        // Render at high resolution once (like the reference's fixed 2048×512 canvas).
-        // Use 4× CSS size to supersample, ensuring sharp edges at any display size.
-        const superScale = 4;
+        const superScale = reducedBudget ? 2 : 3;
         const cw = containerRef.current.clientWidth;
         const ch = containerRef.current.clientHeight;
         const width = Math.max(1, cw * superScale);
@@ -179,8 +182,8 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
           });
         }
       } else {
-        textCanvas.width = 2048;
-        textCanvas.height = 512;
+        textCanvas.width = reducedBudget ? 1536 : 2048;
+        textCanvas.height = reducedBudget ? 384 : 512;
         ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
         ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center';
@@ -229,7 +232,13 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
 
     const renderLoop = () => {
       reqId = requestAnimationFrame(renderLoop);
-      if (!isVisibleRef.current || shouldThrottleFrame(frameCount++, idleTracker.idle)) return;
+      if (
+        !isVisibleRef.current ||
+        shouldThrottleFrame(frameCount++, idleTracker.idle, {
+          activeFrameInterval: reducedBudget ? 2 : 1,
+          idleFrameInterval: reducedBudget ? 8 : 4,
+        })
+      ) return;
 
       const t = clock.getElapsedTime();
       const mX = mouseX.get();

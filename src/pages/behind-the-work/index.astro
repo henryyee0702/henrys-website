@@ -42,7 +42,7 @@ const posts = await getSeriesPosts('behind-the-work', 'newest');
       {posts.length > 0 ? (
         <div class="flex flex-col">
           {posts.map((post) => (
-            <a href={`/writing/${post.slug}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-6 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
+            <a href={`/writing/${post.id}`} class="group flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6 py-6 border-b border-white/[0.04] hover:border-white/[0.1] transition-colors">
               <time class="text-xs text-[#555555] tracking-wide flex-shrink-0 sm:w-28 tabular-nums">
                 {post.data.publishDate.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })}
               </time>

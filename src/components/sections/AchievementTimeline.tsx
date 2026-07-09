@@ -14,8 +14,8 @@ const ENGLISH_REVEAL_HOLD_RATIO = 0.16;
 const ENGLISH_REVEAL_HOLD_MULTIPLIER = 3;
 const LAST_ACHIEVEMENT_FULBRIGHT_VISIBILITY_BUFFER_RATIO = 0.5;
 const EXTENDED_ENGLISH_REVEAL_HOLD_RATIO = ENGLISH_REVEAL_HOLD_RATIO * ENGLISH_REVEAL_HOLD_MULTIPLIER;
-const DEFAULT_ACHIEVEMENT_STEP_HEIGHT = `${100 + (ENGLISH_REVEAL_HOLD_MULTIPLIER - 1) * ENGLISH_REVEAL_HOLD_RATIO * 100}dvh`;
-const LAST_ACHIEVEMENT_STEP_HEIGHT = `${132 + (ENGLISH_REVEAL_HOLD_MULTIPLIER - 1) * ENGLISH_REVEAL_HOLD_RATIO * 100 + LAST_ACHIEVEMENT_FULBRIGHT_VISIBILITY_BUFFER_RATIO * 100}dvh`;
+const DEFAULT_ACHIEVEMENT_STEP_HEIGHT = `${100 + (ENGLISH_REVEAL_HOLD_MULTIPLIER - 1) * ENGLISH_REVEAL_HOLD_RATIO * 100}svh`;
+const LAST_ACHIEVEMENT_STEP_HEIGHT = `${132 + (ENGLISH_REVEAL_HOLD_MULTIPLIER - 1) * ENGLISH_REVEAL_HOLD_RATIO * 100 + LAST_ACHIEVEMENT_FULBRIGHT_VISIBILITY_BUFFER_RATIO * 100}svh`;
 const formatYear = (year: number) => year.toString().padStart(4, '0');
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -216,6 +216,7 @@ export const AchievementTimeline: React.FC = () => {
   const activeIndexRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
   const activeItem = achievements[activeIndex];
 
   const setActiveAchievement = (index: number) => {
@@ -372,9 +373,13 @@ export const AchievementTimeline: React.FC = () => {
 
   return (
     <section id="honors" ref={sectionRef} className="relative bg-[#050505]">
-      <div className="sticky top-0 z-10 h-[100dvh] overflow-hidden border-y border-white/[0.05] bg-[#050505]">
+      <div className="sticky top-0 z-10 h-[100svh] overflow-hidden border-y border-white/[0.05] bg-[#050505]">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_20%,rgba(255,255,255,0)_80%,rgba(255,255,255,0.02)_100%)]" />
-        <div ref={sectionGlowRef} className="absolute left-[6%] top-[10%] h-[36rem] w-[36rem] rounded-full opacity-[0.11] blur-[160px]" style={{ backgroundColor: activeItem.artifact.accentColor }} />
+        <div
+          ref={sectionGlowRef}
+          className={`absolute left-[6%] top-[10%] rounded-full ${coarsePointer ? 'h-[22rem] w-[22rem] opacity-[0.08] blur-[72px]' : 'h-[36rem] w-[36rem] opacity-[0.11] blur-[160px]'}`}
+          style={{ backgroundColor: activeItem.artifact.accentColor }}
+        />
         {activeIndex === achievements.length - 1 ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[22svh] bg-[linear-gradient(180deg,rgba(5,5,5,0)_0%,rgba(5,5,5,0.88)_45%,rgba(5,5,5,1)_100%)]" />
         ) : null}
@@ -423,13 +428,13 @@ export const AchievementTimeline: React.FC = () => {
         </nav>
       </div>
 
-      <div className="-mt-[100dvh]" aria-hidden="true">
+      <div className="-mt-[100svh]" aria-hidden="true">
         {achievements.map((item, index) => (
           <div
             key={`${item.year}-step-${index}`}
             id={`honor-${item.year}`}
             ref={(el) => { stepRefs.current[index] = el; }}
-            className="h-[100dvh]"
+            className="h-[100svh]"
             style={{ height: index === achievements.length - 1 ? LAST_ACHIEVEMENT_STEP_HEIGHT : DEFAULT_ACHIEVEMENT_STEP_HEIGHT }}
           />
         ))}

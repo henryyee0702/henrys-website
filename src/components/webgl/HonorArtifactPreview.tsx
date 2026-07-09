@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { useReducedMotion } from 'framer-motion';
 import { useGpuTier, adaptCloudinaryUrl } from '@/components/webgl/gpu-tier';
 import { IdleTracker, shouldThrottleFrame } from '@/lib/adaptive-render';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export type HonorArtifactRecipe = 'book-award' | 'jogging-president' | 'micro-movie-gold' | 'fulbright-emi';
 
@@ -30,6 +31,7 @@ interface ArtifactResources {
   backMaterial: THREE.Material;
   frontTexture: THREE.Texture;
   backTexture?: THREE.Texture;
+  disposeTextures: boolean;
   mesh: THREE.Mesh;
 }
 
@@ -37,6 +39,21 @@ const loadTexture = (loader: THREE.TextureLoader, url: string) =>
   new Promise<THREE.Texture>((resolve, reject) => {
     loader.load(url, resolve, undefined, reject);
   });
+
+const textureCache = new Map<string, Promise<THREE.Texture>>();
+
+const loadCachedTexture = (loader: THREE.TextureLoader, url: string) => {
+  const cachedTexture = textureCache.get(url);
+  if (cachedTexture) return cachedTexture;
+
+  const texturePromise = loadTexture(loader, url).catch((error) => {
+    textureCache.delete(url);
+    throw error;
+  });
+
+  textureCache.set(url, texturePromise);
+  return texturePromise;
+};
 
 const disposeArtifactResources = (resources: ArtifactResources | null, group: THREE.Group | null) => {
   if (!resources) return;
@@ -46,8 +63,11 @@ const disposeArtifactResources = (resources: ArtifactResources | null, group: TH
   }
 
   resources.geometry.dispose();
-  resources.frontTexture.dispose();
-  resources.backTexture?.dispose();
+
+  if (resources.disposeTextures) {
+    resources.frontTexture.dispose();
+    resources.backTexture?.dispose();
+  }
 
   const materials = new Set<THREE.Material>([
     resources.sideMaterial,
@@ -63,9 +83,9 @@ const getInitialRotation = (artifact: HonorArtifactConfig) => ({
   y: artifact.baseRotationY ?? (artifact.initialFace === 'back' ? Math.PI : 0),
 });
 
-const prepareTexture = (texture: THREE.Texture, renderer: THREE.WebGLRenderer) => {
+const prepareTexture = (texture: THREE.Texture, renderer: THREE.WebGLRenderer, maxAnisotropy: number) => {
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  texture.anisotropy = Math.min(maxAnisotropy, renderer.capabilities.getMaxAnisotropy());
 };
 
 const createBaseFrontMaterial = (texture: THREE.Texture, emissiveIntensity: number) =>
@@ -372,11 +392,22 @@ const createArtifactResources = (
   renderer: THREE.WebGLRenderer,
   frontTexture: THREE.Texture,
   backTexture?: THREE.Texture,
+  options: {
+    enableShadows: boolean;
+    lowPower: boolean;
+    maxAnisotropy: number;
+    disposeTextures?: boolean;
+  } = {
+    enableShadows: true,
+    lowPower: false,
+    maxAnisotropy: 8,
+    disposeTextures: true,
+  },
 ): ArtifactResources => {
-  prepareTexture(frontTexture, renderer);
+  prepareTexture(frontTexture, renderer, options.maxAnisotropy);
 
   if (backTexture) {
-    prepareTexture(backTexture, renderer);
+    prepareTexture(backTexture, renderer, options.maxAnisotropy);
   }
 
   const geometry =
@@ -385,29 +416,34 @@ const createArtifactResources = (
       : new THREE.BoxGeometry(2.8, 1.96, 0.025);
 
   const sideMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-  const emissiveIntensity = artifact.emissiveIntensity ?? 0.12;
+  const emissiveIntensity = (artifact.emissiveIntensity ?? 0.12) * (options.lowPower ? 0.82 : 1);
 
   let frontMaterial: THREE.MeshStandardMaterial;
   let backMaterial: THREE.Material;
 
-  switch (artifact.recipe) {
-    case 'jogging-president':
-      frontMaterial = createJoggingFrontMaterial(frontTexture, emissiveIntensity);
-      backMaterial = backTexture ? createTexturedFoilBackMaterial(backTexture) : createFulbrightBackMaterial();
-      break;
-    case 'micro-movie-gold':
-      frontMaterial = createMicroMovieFrontMaterial(frontTexture, emissiveIntensity);
-      backMaterial = backTexture ? createMicroMovieBackMaterial(backTexture) : createFulbrightBackMaterial();
-      break;
-    case 'fulbright-emi':
-      frontMaterial = createFulbrightFrontMaterial(frontTexture, emissiveIntensity);
-      backMaterial = createFulbrightBackMaterial();
-      break;
-    case 'book-award':
-    default:
-      frontMaterial = createBookAwardFrontMaterial(frontTexture, emissiveIntensity);
-      backMaterial = backTexture ? createTexturedFoilBackMaterial(backTexture) : createFulbrightBackMaterial();
-      break;
+  if (options.lowPower) {
+    frontMaterial = createBaseFrontMaterial(frontTexture, emissiveIntensity);
+    backMaterial = backTexture ? createBaseFrontMaterial(backTexture, Math.min(emissiveIntensity, 0.08)) : createFulbrightBackMaterial();
+  } else {
+    switch (artifact.recipe) {
+      case 'jogging-president':
+        frontMaterial = createJoggingFrontMaterial(frontTexture, emissiveIntensity);
+        backMaterial = backTexture ? createTexturedFoilBackMaterial(backTexture) : createFulbrightBackMaterial();
+        break;
+      case 'micro-movie-gold':
+        frontMaterial = createMicroMovieFrontMaterial(frontTexture, emissiveIntensity);
+        backMaterial = backTexture ? createMicroMovieBackMaterial(backTexture) : createFulbrightBackMaterial();
+        break;
+      case 'fulbright-emi':
+        frontMaterial = createFulbrightFrontMaterial(frontTexture, emissiveIntensity);
+        backMaterial = createFulbrightBackMaterial();
+        break;
+      case 'book-award':
+      default:
+        frontMaterial = createBookAwardFrontMaterial(frontTexture, emissiveIntensity);
+        backMaterial = backTexture ? createTexturedFoilBackMaterial(backTexture) : createFulbrightBackMaterial();
+        break;
+    }
   }
 
   const mesh = new THREE.Mesh(geometry, [
@@ -419,8 +455,8 @@ const createArtifactResources = (
     backMaterial,
   ]);
 
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  mesh.castShadow = options.enableShadows;
+  mesh.receiveShadow = options.enableShadows;
 
   return {
     geometry,
@@ -429,6 +465,7 @@ const createArtifactResources = (
     backMaterial,
     frontTexture,
     backTexture,
+    disposeTextures: options.disposeTextures ?? true,
     mesh,
   };
 };
@@ -436,7 +473,12 @@ const createArtifactResources = (
 export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> = ({ artifact }) => {
   const prefersReduced = useReducedMotion();
   const gpu = useGpuTier();
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const lowPower = gpu.tier === 'reduced' || isCoarsePointer;
+  const enableShadows = gpu.tier === 'full' && !isCoarsePointer;
+  const maxAnisotropy = lowPower ? 2 : 8;
   const canRenderWebgl = !prefersReduced && gpu.tier !== 'fallback';
+  const fallbackImageUrl = adaptCloudinaryUrl(artifact.frontTextureUrl, gpu.tier);
   const mountRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -464,19 +506,24 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#050505');
-    const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / mount.clientHeight, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      Math.max(1, mount.clientWidth) / Math.max(1, mount.clientHeight),
+      0.1,
+      100,
+    );
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
     });
 
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, gpu.maxDpr));
+    renderer.setSize(Math.max(1, mount.clientWidth), Math.max(1, mount.clientHeight));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? Math.min(gpu.maxDpr, 1.4) : gpu.maxDpr));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-    renderer.shadowMap.enabled = gpu.tier === 'full';
+    renderer.shadowMap.enabled = enableShadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
 
@@ -484,13 +531,13 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
     cameraRef.current = camera;
     rendererRef.current = renderer;
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, lowPower ? 0.74 : 0.6);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    const mainLight = new THREE.DirectionalLight(0xffffff, lowPower ? 0.62 : 0.7);
     mainLight.position.set(3, 2, 4);
-    mainLight.castShadow = gpu.tier === 'full';
+    mainLight.castShadow = enableShadows;
     mainLight.shadow.mapSize.width = gpu.shadowMapSize;
     mainLight.shadow.mapSize.height = gpu.shadowMapSize;
     mainLight.shadow.camera.left = -4;
@@ -503,15 +550,17 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
     mainLight.shadow.radius = 32;
     scene.add(mainLight);
 
-    const foilHighlight1 = new THREE.DirectionalLight(0xfff0dd, 0.4);
-    foilHighlight1.position.set(2.5, 3.0, 4.0);
-    scene.add(foilHighlight1);
+    if (!lowPower) {
+      const foilHighlight1 = new THREE.DirectionalLight(0xfff0dd, 0.4);
+      foilHighlight1.position.set(2.5, 3.0, 4.0);
+      scene.add(foilHighlight1);
 
-    const foilHighlight2 = new THREE.DirectionalLight(0xeef5ff, 0.2);
-    foilHighlight2.position.set(-2.0, -2.0, 3.5);
-    scene.add(foilHighlight2);
+      const foilHighlight2 = new THREE.DirectionalLight(0xeef5ff, 0.2);
+      foilHighlight2.position.set(-2.0, -2.0, 3.5);
+      scene.add(foilHighlight2);
+    }
 
-    const foilLight = new THREE.PointLight(0xfff8ee, 1.2, 20);
+    const foilLight = new THREE.PointLight(0xfff8ee, lowPower ? 0.72 : 1.2, lowPower ? 12 : 20);
     foilLight.position.set(0, 0, 3.5);
     scene.add(foilLight);
     foilLightRef.current = foilLight;
@@ -526,28 +575,43 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
     const initialRotation = getInitialRotation(artifactRef.current);
     macroGroup.rotation.set(initialRotation.x, initialRotation.y, 0);
 
-    const planeGeo = new THREE.PlaneGeometry(20, 20);
-    const planeMat = new THREE.ShadowMaterial({ opacity: 0.5 });
-    const plane = new THREE.Mesh(planeGeo, planeMat);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = -2;
-    plane.receiveShadow = true;
-    scene.add(plane);
+    let planeGeo: THREE.PlaneGeometry | null = null;
+    let planeMat: THREE.ShadowMaterial | null = null;
+    if (enableShadows) {
+      planeGeo = new THREE.PlaneGeometry(20, 20);
+      planeMat = new THREE.ShadowMaterial({ opacity: 0.5 });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.y = -2;
+      plane.receiveShadow = true;
+      scene.add(plane);
+    }
 
     const idleTracker = new IdleTracker();
     let frameCount = 0;
     let isVisible = true;
-    const io = new IntersectionObserver(([entry]) => {
-      isVisible = entry.isIntersecting;
-    });
-    io.observe(mount);
+    let isDisposed = false;
+    let isLoopRunning = false;
+
+    const renderCurrentScene = () => {
+      const currentRenderer = rendererRef.current;
+      const currentCamera = cameraRef.current;
+      const currentScene = sceneRef.current;
+
+      if (!currentRenderer || !currentCamera || !currentScene) return;
+
+      currentRenderer.render(currentScene, currentCamera);
+    };
 
     const syncCamera = () => {
       const currentArtifact = artifactRef.current;
-      camera.aspect = mount.clientWidth / mount.clientHeight;
+      const width = Math.max(1, mount.clientWidth);
+      const height = Math.max(1, mount.clientHeight);
+      camera.aspect = width / height;
       camera.position.z = currentArtifact.cameraDistance ?? (currentArtifact.orientation === 'portrait' ? 5.2 : 4.5);
       camera.updateProjectionMatrix();
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
+      renderer.setSize(width, height);
+      renderCurrentScene();
     };
 
     const onPointerDown = (event: PointerEvent) => {
@@ -558,6 +622,8 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      if (!isVisible) return;
+
       const rect = mount.getBoundingClientRect();
       mouseOffsetRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouseOffsetRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -582,14 +648,22 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
 
     syncCamera();
 
-    window.addEventListener('resize', syncCamera, { passive: true });
-    mount.addEventListener('pointerdown', onPointerDown, { passive: true });
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerup', onPointerUp, { passive: true });
-
     const animate = () => {
+      if (isDisposed || !isLoopRunning) return;
+
+      if (!isVisible || document.hidden) {
+        isLoopRunning = false;
+        animationFrameRef.current = null;
+        return;
+      }
+
       animationFrameRef.current = requestAnimationFrame(animate);
-      if (!isVisible || shouldThrottleFrame(frameCount++, idleTracker.idle)) return;
+      if (
+        shouldThrottleFrame(frameCount++, idleTracker.idle, {
+          activeFrameInterval: lowPower ? 2 : 1,
+          idleFrameInterval: lowPower ? 8 : 4,
+        })
+      ) return;
 
       const macroGroup = macroGroupRef.current;
       const microGroup = microGroupRef.current;
@@ -622,24 +696,66 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
       currentRenderer.render(currentScene, currentCamera);
     };
 
-    animate();
-
-    return () => {
-      window.removeEventListener('resize', syncCamera);
-      mount.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      io.disconnect();
+    const stopLoop = () => {
+      isLoopRunning = false;
 
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
+    };
+
+    const startLoop = () => {
+      if (isDisposed || isLoopRunning || !isVisible || document.hidden) return;
+
+      isLoopRunning = true;
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    const io = new IntersectionObserver(([entry]) => {
+      isVisible = entry.isIntersecting;
+
+      if (isVisible) {
+        startLoop();
+      } else {
+        stopLoop();
+      }
+    });
+    io.observe(mount);
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopLoop();
+        return;
+      }
+
+      startLoop();
+    };
+
+    const resizeObserver = new ResizeObserver(syncCamera);
+    resizeObserver.observe(mount);
+    mount.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    startLoop();
+
+    return () => {
+      isDisposed = true;
+      stopLoop();
+      resizeObserver.disconnect();
+      mount.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      io.disconnect();
 
       disposeArtifactResources(resourcesRef.current, microGroupRef.current);
       resourcesRef.current = null;
 
-      planeGeo.dispose();
-      planeMat.dispose();
+      planeGeo?.dispose();
+      planeMat?.dispose();
       renderer.dispose();
 
       if (mount.contains(renderer.domElement)) {
@@ -653,7 +769,7 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
       microGroupRef.current = null;
       foilLightRef.current = null;
     };
-  }, [canRenderWebgl, gpu.tier]);
+  }, [canRenderWebgl, enableShadows, gpu.maxDpr, gpu.shadowMapSize, gpu.tier, isCoarsePointer, lowPower]);
 
   useEffect(() => {
     artifactRef.current = artifact;
@@ -677,23 +793,24 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
       setRenderError(false);
       setIsLoading(true);
 
-      let loadedFront: THREE.Texture | undefined;
-      let loadedBack: THREE.Texture | undefined;
       try {
-        const results = await Promise.all([
-          loadTexture(loader, adaptCloudinaryUrl(artifact.frontTextureUrl, gpu.tier)),
-          artifact.backTextureUrl ? loadTexture(loader, adaptCloudinaryUrl(artifact.backTextureUrl, gpu.tier)) : Promise.resolve(undefined),
+        const frontTextureUrl = adaptCloudinaryUrl(artifact.frontTextureUrl, gpu.tier);
+        const backTextureUrl = artifact.backTextureUrl ? adaptCloudinaryUrl(artifact.backTextureUrl, gpu.tier) : undefined;
+        const [loadedFront, loadedBack] = await Promise.all([
+          loadCachedTexture(loader, frontTextureUrl),
+          backTextureUrl ? loadCachedTexture(loader, backTextureUrl) : Promise.resolve(undefined),
         ]);
-        loadedFront = results[0];
-        loadedBack = results[1];
 
         if (cancelled) {
-          loadedFront.dispose();
-          loadedBack?.dispose();
           return;
         }
 
-        const nextResources = createArtifactResources(artifact, renderer, loadedFront, loadedBack);
+        const nextResources = createArtifactResources(artifact, renderer, loadedFront, loadedBack, {
+          enableShadows,
+          lowPower,
+          maxAnisotropy,
+          disposeTextures: false,
+        });
 
         disposeArtifactResources(resourcesRef.current, group);
         resourcesRef.current = nextResources;
@@ -717,9 +834,11 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
 
         setRenderError(false);
         setIsLoading(false);
+        const scene = sceneRef.current;
+        if (scene) {
+          renderer.render(scene, camera);
+        }
       } catch (error) {
-        loadedFront?.dispose();
-        loadedBack?.dispose();
         if (!cancelled) {
           console.error('Failed to load honor artifact.', error);
           setRenderError(true);
@@ -733,7 +852,7 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
     return () => {
       cancelled = true;
     };
-  }, [artifact, canRenderWebgl, gpu.tier]);
+  }, [artifact, canRenderWebgl, enableShadows, gpu.tier, lowPower, maxAnisotropy]);
 
   // ── Reduced-motion / GPU fallback: skip WebGL entirely ─────────────
   if (!canRenderWebgl) {
@@ -742,7 +861,7 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0c0f_0%,#060606_100%)]" />
         <div className="absolute inset-0 flex items-center justify-center p-6 md:p-10">
           <img
-            src={artifact.frontTextureUrl}
+            src={fallbackImageUrl}
             alt={artifact.staticImageAlt}
             className="h-full w-full object-contain"
             loading="eager"
@@ -755,13 +874,17 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-[#070707] shadow-[0_32px_120px_rgba(0,0,0,0.38)] md:rounded-[2rem]">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0c0f_0%,#060606_100%)]" />
-      <div ref={glowRef} className="pointer-events-none absolute left-1/2 top-[42%] h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-[0.12] blur-[110px]" style={{ backgroundColor: artifact.accentColor }} />
+      <div
+        ref={glowRef}
+        className={`pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full ${lowPower ? 'h-[18rem] w-[18rem] opacity-[0.08] blur-[58px]' : 'h-[26rem] w-[26rem] opacity-[0.12] blur-[110px]'}`}
+        style={{ backgroundColor: artifact.accentColor }}
+      />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,rgba(255,255,255,0.08),transparent_36%)] opacity-60" />
 
       {(isLoading || renderError) && (
         <div className={`absolute inset-0 flex items-center justify-center p-6 md:p-10 ${renderError ? 'z-20' : 'z-10'}`}>
           <img
-            src={artifact.frontTextureUrl}
+            src={fallbackImageUrl}
             alt={artifact.staticImageAlt}
             className={`h-full w-full object-contain transition-opacity duration-500 ${isLoading && !renderError ? 'opacity-72 saturate-[0.9]' : 'opacity-100'}`}
             loading="eager"

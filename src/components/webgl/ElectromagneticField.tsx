@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, memo } from 'react';
 import { useReducedMotion, type MotionValue } from 'framer-motion';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface ElectromagneticFieldProps {
   mouseX: MotionValue<number>;
@@ -9,10 +10,12 @@ interface ElectromagneticFieldProps {
 export const ElectromagneticField: React.FC<ElectromagneticFieldProps> = memo(({ mouseX, mouseY }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const prefersReduced = useReducedMotion();
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const shouldRender = !prefersReduced && !isCoarsePointer;
   const isVisibleRef = useRef(false);
 
   useEffect(() => {
-    if (prefersReduced || !canvasRef.current) return;
+    if (!shouldRender || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
@@ -82,9 +85,9 @@ export const ElectromagneticField: React.FC<ElectromagneticFieldProps> = memo(({
       cancelAnimationFrame(animationFrameId);
       io.disconnect();
     };
-  }, [mouseX, mouseY, prefersReduced]);
+  }, [mouseX, mouseY, shouldRender]);
 
-  if (prefersReduced) return null;
+  if (!shouldRender) return null;
   return (
     <canvas 
       ref={canvasRef} 

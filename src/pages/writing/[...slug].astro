@@ -2,17 +2,18 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { Navigation } from '@/components/layout/Navigation';
 import { Footer } from '@/components/layout/Footer';
+import { render } from 'astro:content';
 import { getPublishedWriting, getPrevNext, formatDateLong } from '@/lib/content';
 
 export async function getStaticPaths() {
   const writingEntries = await getPublishedWriting();
   return writingEntries.map(entry => ({
-    params: { slug: entry.slug }, props: { entry },
+    params: { slug: entry.id }, props: { entry },
   }));
 }
 
 const { entry } = Astro.props;
-const { Content } = await entry.render();
+const { Content } = await render(entry);
 const isMyStory = entry.data.seriesId === 'my-story';
 const newestFirst = isMyStory;
 const seriesHref = entry.data.seriesId ? `/series/${entry.data.seriesId}` : '/writing';
@@ -72,13 +73,13 @@ const { prev: prevPost, next: nextPost } = await getPrevNext(entry, newestFirst 
     {(prevPost || nextPost) && (
       <nav class={isMyStory ? 'mt-20 md:mt-24 pt-10 md:pt-12 border-t border-white/[0.05] grid grid-cols-2 gap-6' : 'mt-24 pt-12 border-t border-white/[0.05] grid grid-cols-2 gap-6'}>
         {prevPost ? (
-          <a href={`/writing/${prevPost.slug}`} class="group flex flex-col gap-1">
+          <a href={`/writing/${prevPost.id}`} class="group flex flex-col gap-1">
             <span class="text-[10px] uppercase tracking-[0.25em] text-[#555555]">← {newestFirst ? 'Newer' : 'Previous'}</span>
             <span class="text-sm text-[#A1A1AA] group-hover:text-white transition-colors font-medium tracking-tight">{prevPost.data.title}</span>
           </a>
         ) : <div />}
         {nextPost ? (
-          <a href={`/writing/${nextPost.slug}`} class="group flex flex-col gap-1 text-right items-end">
+          <a href={`/writing/${nextPost.id}`} class="group flex flex-col gap-1 text-right items-end">
             <span class="text-[10px] uppercase tracking-[0.25em] text-[#555555]">{newestFirst ? 'Older' : 'Next'} →</span>
             <span class="text-sm text-[#A1A1AA] group-hover:text-white transition-colors font-medium tracking-tight">{nextPost.data.title}</span>
           </a>

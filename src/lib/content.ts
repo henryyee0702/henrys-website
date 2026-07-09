@@ -77,7 +77,7 @@ export async function getPrevNext(
     : published;
 
   const sorted = order === 'newest' ? sortByDateDesc(pool) : sortByDateAsc(pool);
-  const idx = sorted.findIndex(p => p.slug === entry.slug);
+  const idx = sorted.findIndex(p => p.id === entry.id);
 
   return {
     prev: idx > 0 ? sorted[idx - 1] : null,
@@ -122,7 +122,7 @@ export function toStoryFeedItems(
   dateFmt: (d: Date) => string = formatDateMonth,
 ): StoryFeedItem[] {
   return posts.map(post => ({
-    href: `/writing/${post.slug}`,
+    href: `/writing/${post.id}`,
     title: post.data.title,
     excerpt: post.data.excerpt ?? '',
     coverImage: post.data.coverImage ?? '',
