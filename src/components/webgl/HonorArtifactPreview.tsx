@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useReducedMotion } from 'framer-motion';
 import { useGpuTier, adaptCloudinaryUrl } from '@/components/webgl/gpu-tier';
+import { ThreeRectangleLoader } from '@/components/ui/ThreeRectangleLoader';
 import { IdleTracker, shouldThrottleFrame } from '@/lib/adaptive-render';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -873,6 +874,100 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-[#070707] shadow-[0_32px_120px_rgba(0,0,0,0.38)] md:rounded-[2rem]">
+      <style>{`
+        .three-rectangle-loader {
+          --loader-size: clamp(4.8rem, 10vw, 6.4rem);
+          --rect-width: calc(var(--loader-size) * 0.22);
+          --rect-height: calc(var(--loader-size) * 0.28);
+          --top-center-x: calc((var(--loader-size) - var(--rect-width)) / 2);
+          --top-center-y: calc(var(--loader-size) * 0.07);
+          --bottom-left-x: calc(var(--loader-size) * 0.185);
+          --bottom-left-y: calc(var(--loader-size) * 0.515);
+          --bottom-right-x: calc(var(--loader-size) - var(--rect-width) - (var(--loader-size) * 0.185));
+          --bottom-right-y: calc(var(--loader-size) * 0.515);
+          position: relative;
+          width: var(--loader-size);
+          height: var(--loader-size);
+          animation: three-rectangle-loader-breathe 2000ms ease-in-out infinite;
+          will-change: transform;
+        }
+
+        .three-rectangle-loader::before {
+          content: '';
+          position: absolute;
+          inset: -62%;
+          background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 68%);
+          pointer-events: none;
+        }
+
+        .three-rectangle-loader__shape {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: var(--rect-width);
+          height: var(--rect-height);
+          border: clamp(2.5px, 0.25vw, 4px) solid rgba(255, 255, 255, 0.92);
+          background: rgba(255, 255, 255, 0.02);
+          box-shadow: 0 0 14px rgba(255, 255, 255, 0.12), 0 0 28px rgba(255, 255, 255, 0.05);
+          animation:
+            three-rectangle-loader-path 4000ms cubic-bezier(1, 0, 0, 1) infinite,
+            three-rectangle-loader-blink 1000ms ease-in-out infinite;
+          will-change: transform, filter, opacity;
+        }
+
+        .three-rectangle-loader__shape:nth-child(1) {
+          border-color: rgba(255, 255, 255, 0.98);
+        }
+
+        .three-rectangle-loader__shape:nth-child(2) {
+          border-color: rgba(255, 255, 255, 0.88);
+          box-shadow: 0 0 12px rgba(255, 255, 255, 0.1), 0 0 24px rgba(255, 255, 255, 0.045);
+          animation-delay: -1333ms, -75ms;
+        }
+
+        .three-rectangle-loader__shape:nth-child(3) {
+          border-color: rgba(255, 255, 255, 0.78);
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.08), 0 0 18px rgba(255, 255, 255, 0.035);
+          animation-delay: -2666ms, -150ms;
+        }
+
+        @keyframes three-rectangle-loader-path {
+          0%, 100% { transform: translate3d(var(--top-center-x), var(--top-center-y), 0); }
+          33.333% { transform: translate3d(var(--bottom-right-x), var(--bottom-right-y), 0); }
+          66.666% { transform: translate3d(var(--bottom-left-x), var(--bottom-left-y), 0); }
+        }
+
+        @keyframes three-rectangle-loader-blink {
+          0%, 100% { filter: brightness(1); opacity: 0.95; }
+          50% { filter: brightness(0.72); opacity: 0.82; }
+        }
+
+        @keyframes three-rectangle-loader-breathe {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(0.7); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .three-rectangle-loader { animation: none; }
+          .three-rectangle-loader__shape {
+            animation: three-rectangle-loader-reduced 1600ms ease-in-out infinite;
+            transform: translate3d(var(--top-center-x), var(--top-center-y), 0);
+          }
+          .three-rectangle-loader__shape:nth-child(2) {
+            animation-delay: -240ms;
+            transform: translate3d(var(--bottom-right-x), var(--bottom-right-y), 0);
+          }
+          .three-rectangle-loader__shape:nth-child(3) {
+            animation-delay: -480ms;
+            transform: translate3d(var(--bottom-left-x), var(--bottom-left-y), 0);
+          }
+        }
+
+        @keyframes three-rectangle-loader-reduced {
+          0%, 100% { opacity: 0.48; }
+          50% { opacity: 1; }
+        }
+      `}</style>
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0c0f_0%,#060606_100%)]" />
       <div
         ref={glowRef}
@@ -891,9 +986,8 @@ export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> =
           />
 
           {isLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#070707]/38 text-[11px] uppercase tracking-[0.28em] text-white/65 backdrop-blur-[2px]">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/15 border-t-white/80" />
-              <span>Loading Artifact</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-[#070707]/58 backdrop-blur-[2px]">
+              <ThreeRectangleLoader ariaLabel="載入 3D 展示" />
             </div>
           )}
         </div>

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trophy } from 'lucide-react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
+import { MeltingTimeCrystalFinale } from '@/components/sections/MeltingTimeCrystalFinale';
 
 const ASSETS = {
   macModel: 'https://ksenia-k.com/models/mac-noUv.glb',
@@ -932,6 +932,9 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
       gsap.registerPlugin(ScrollTrigger);
 
+      const introHandoffStart = 0.75;
+      const introTextExitStart = 1.8;
+
       gsapContext = gsap.context(() => {
         gsap.set('.melting-time-text-1', { opacity: 1, y: 0, scale: 1, transformOrigin: '50% 50%' });
         gsap.set('.melting-time-text-2', {
@@ -963,7 +966,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
             duration: 1.35,
             ease: 'power2.out',
           },
-          1.5,
+          introHandoffStart,
         );
         timeline.to(
           '.melting-time-text-2',
@@ -973,12 +976,16 @@ export const MeltingTimeWorkExperience: React.FC = () => {
             duration: 1.5,
             ease: 'power2.out',
           },
-          1.5,
+          introHandoffStart,
         );
-        timeline.to('.melting-time-text-2', { opacity: 0.96, duration: 0.9, ease: 'power2.out' }, 1.5);
-        timeline.to('.melting-time-text-1', { opacity: 0, y: getIntroTextExitY, duration: 0.45, ease: 'power2.in' }, 2.55);
-        timeline.to(lid.rotation, { x: -0.15 * Math.PI, duration: 1.5, ease: 'power1.inOut' }, 1.5);
-        timeline.to(mac.position, { z: 5, y: -7, duration: 1.5, ease: 'power1.inOut' }, 1.5);
+        timeline.to('.melting-time-text-2', { opacity: 0.96, duration: 0.9, ease: 'power2.out' }, introHandoffStart);
+        timeline.to(
+          '.melting-time-text-1',
+          { opacity: 0, y: getIntroTextExitY, duration: 0.45, ease: 'power2.in' },
+          introTextExitStart,
+        );
+        timeline.to(lid.rotation, { x: -0.15 * Math.PI, duration: 1.5, ease: 'power1.inOut' }, introHandoffStart);
+        timeline.to(mac.position, { z: 5, y: -7, duration: 1.5, ease: 'power1.inOut' }, introHandoffStart);
 
         if (screenLight) {
           timeline.to(screen, { opacity: 1, duration: 0.5 }, 3);
@@ -1023,191 +1030,97 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         timeline.to({}, { duration: 4 }, 11);
 
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const crystalStage = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-stage]'));
+        const crystalScene = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-scene]'));
+        const crystalChars = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-char]'));
+        const crystalSubtitle = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-subtitle]'));
 
-        const isCompactTransition = () => window.innerWidth < 640;
-        const meltField = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-melt-field'));
-        const memorySlit = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-memory-slit'));
-        const memoryFilm = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-memory-film'));
-        const memoryGrain = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-memory-grain'));
-        const memoryDrips = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-memory-drip'));
-        const finalLiquid = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-final-liquid'));
-        const titleLiquid = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-title-liquid-layer'));
-        const awardPill = Array.from(root.querySelectorAll<HTMLElement>('.melting-time-award-pill'));
-
-        gsap.set('.melting-time-content-backdrop', { opacity: 0 });
-        gsap.set('.melting-time-transition-veil', {
-          clipPath: 'inset(48% 0% 48% 0% round 34px)',
+        gsap.set(crystalChars, {
           opacity: 0,
-        });
-        gsap.set(meltField, {
-          opacity: 0,
-          y: () => (isCompactTransition() ? -8 : -14),
-        });
-        gsap.set(memorySlit, {
-          opacity: 0,
-          scaleX: () => (isCompactTransition() ? 0.88 : 0.78),
-          scaleY: 0.48,
-          y: () => (isCompactTransition() ? -10 : -16),
-        });
-        gsap.set(memoryFilm, { opacity: 0, scale: 1.06 });
-        gsap.set(memoryGrain, { opacity: 0 });
-        gsap.set(memoryDrips, {
-          opacity: 0,
-          scaleY: 0.04,
-          y: -18,
-          transformOrigin: '50% 0%',
-        });
-        gsap.set('.melting-time-transition-line', { opacity: 0, scaleX: 0.08, scaleY: 1, y: 0 });
-        gsap.set('.melting-time-transition-sheen', { opacity: 0, xPercent: -120 });
-        gsap.set('.melting-time-transition-slice', { opacity: 0, scaleX: 0.2, x: 0 });
-        gsap.set('.melting-time-content-wrapper', {
-          y: () => (isCompactTransition() ? 48 : 70),
-          opacity: 0,
+          y: 40,
           scale: 0.95,
-          filter: 'blur(14px)',
+          filter: 'blur(10px)',
         });
-        gsap.set('.melting-time-hero-title', { clipPath: 'inset(52% 0% 52% 0%)', y: 18 });
-        gsap.set(finalLiquid, { opacity: 0, scale: 1.04, y: () => (isCompactTransition() ? 12 : 20) });
-        gsap.set(titleLiquid, { opacity: 0, y: 10, scale: 0.985 });
-        gsap.set(awardPill, { opacity: 0, y: 14, scale: 0.96 });
+        gsap.set(crystalSubtitle, {
+          opacity: 0,
+          y: 20,
+          filter: 'blur(10px)',
+        });
 
         if (prefersReducedMotion) {
-          gsap.set('.melting-time-content-backdrop', { opacity: 1 });
-          gsap.set('.melting-time-transition-veil', { clipPath: 'inset(0% 0% 0% 0%)', opacity: 1 });
-          gsap.set([...meltField, ...memoryGrain], { opacity: 0 });
-          gsap.set(finalLiquid, { opacity: 0.78, scale: 1, y: 0 });
-          gsap.set('.melting-time-hero-title', { clipPath: 'inset(0% 0% 0% 0%)', y: 0 });
-          gsap.set(titleLiquid, { opacity: 0.82, y: 0, scale: 1 });
-          gsap.set(awardPill, { opacity: 1, y: 0, scale: 1 });
-          gsap.fromTo(
-            '.melting-time-content-wrapper',
-            { y: 24, opacity: 0, scale: 0.98, filter: 'blur(0px)' },
-            {
-              y: 0,
-              opacity: 1,
-              scale: 1,
-              duration: 0.35,
-              ease: 'power2.out',
-              scrollTrigger: {
-                trigger: '.melting-time-content-section',
-                start: 'top 82%',
-              },
-            },
-          );
+          gsap.set(crystalStage, { opacity: 1, scale: 1 });
+          gsap.set(crystalScene, { opacity: 1, scale: 1, filter: 'blur(0px)' });
+          gsap.set([...crystalChars, ...crystalSubtitle], {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            filter: 'blur(0px)',
+          });
         } else {
-          const contentTransition = gsap.timeline({
+          gsap.set(crystalStage, { opacity: 0, scale: 1.035 });
+          gsap.set(crystalScene, { opacity: 0, scale: 0.9, filter: 'blur(12px)' });
+          gsap.timeline({
             scrollTrigger: {
-              trigger: '.melting-time-content-section',
+              trigger: '.melting-time-crystal-finale',
               start: 'top bottom',
-              end: 'top 12%',
-              scrub: 0.9,
+              end: 'top 24%',
+              scrub: 0.65,
               invalidateOnRefresh: true,
             },
+          }).to(crystalStage, {
+            opacity: 1,
+            scale: 1,
+            duration: 1,
+            ease: 'power2.out',
           });
 
-          contentTransition
-            .to('.melting-time-content-backdrop', { opacity: 0.18, duration: 0.26, ease: 'none' }, 0)
-            .to(
-              '.melting-time-transition-veil',
-              { clipPath: 'inset(0% 0% 0% 0% round 0px)', opacity: 0.22, duration: 0.36, ease: 'power2.inOut' },
-              0.05,
-            )
-            .to(meltField, { opacity: 1, y: 0, duration: 0.3, ease: 'power3.out' }, 0.04)
-            .to(
-              memorySlit,
-              {
-                opacity: 1,
-                scaleX: 1,
-                scaleY: 1,
-                y: 0,
-                duration: 0.38,
-                ease: 'power3.out',
-              },
-              0.08,
-            )
-            .to(memoryFilm, { opacity: 0.56, scale: 1, duration: 0.36, ease: 'power2.out' }, 0.1)
-            .to(
-              '.melting-time-transition-line',
-              { opacity: 0.22, scaleX: 1, duration: 0.34, ease: 'power3.out' },
-              0.14,
-            )
-            .to(memoryGrain, { opacity: 0.26, duration: 0.34, ease: 'none' }, 0.16)
-            .to(
-              '.melting-time-transition-slice',
-              {
-                opacity: 0.28,
-                scaleX: 1,
-                x: (index) => (index - 2) * (isCompactTransition() ? 4 : 9),
-                duration: 0.5,
-                stagger: 0.025,
-                ease: 'power2.out',
-              },
-              0.2,
-            )
-            .to(
-              memoryDrips,
-              {
-                opacity: (index) => (index % 3 === 0 ? 0.82 : 0.58),
-                scaleY: (index) => (index % 4 === 0 ? 1.34 : 0.98),
-                y: (index) => {
-                  const compactDistance = [38, 68, 50, 86, 44, 74, 56, 96, 48, 78, 60][index] ?? 54;
-                  const desktopDistance = [62, 106, 78, 146, 68, 116, 88, 164, 76, 132, 94][index] ?? 86;
-                  return isCompactTransition() ? compactDistance : desktopDistance;
-                },
-                duration: 0.6,
-                stagger: 0.024,
-                ease: 'power2.out',
-              },
-              0.27,
-            )
-            .to(
-              '.melting-time-transition-sheen',
-              { opacity: 0.62, xPercent: 104, duration: 0.54, ease: 'power2.inOut' },
-              0.32,
-            )
-            .to('.melting-time-content-backdrop', { opacity: 1, duration: 0.48, ease: 'none' }, 0.4)
-            .to('.melting-time-transition-veil', { opacity: 1, duration: 0.44, ease: 'none' }, 0.42)
-            .to(memoryFilm, { opacity: 0.16, scale: 0.985, duration: 0.36, ease: 'power2.inOut' }, 0.48)
-            .to(
-              memorySlit,
-              {
-                opacity: 0.18,
-                scaleY: 0.2,
-                y: () => (isCompactTransition() ? 30 : 46),
-                duration: 0.34,
-                ease: 'power2.inOut',
-              },
-              0.52,
-            )
-            .to(finalLiquid, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 0.52)
-            .to(
-              '.melting-time-content-wrapper',
-              { y: 0, opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.58, ease: 'power3.out' },
-              0.58,
-            )
-            .to(
-              '.melting-time-hero-title',
-              { clipPath: 'inset(0% 0% 0% 0%)', y: 0, duration: 0.48, ease: 'power3.out' },
-              0.62,
-            )
-            .to(titleLiquid, { opacity: 0.92, y: 0, scale: 1, duration: 0.42, ease: 'power3.out' }, 0.64)
-            .to(awardPill, { opacity: 1, y: 0, scale: 1, duration: 0.34, ease: 'power3.out' }, 0.76)
-            .to('.melting-time-transition-line', { opacity: 0, scaleY: 8, duration: 0.28, ease: 'power2.out' }, 0.78)
-            .to(
-              memoryDrips,
-              {
-                opacity: 0,
-                y: (index) => (isCompactTransition() ? 110 + index * 2 : 170 + index * 3),
-                duration: 0.28,
-                stagger: 0.012,
-                ease: 'power2.in',
-              },
-              0.82,
-            )
-            .to('.melting-time-transition-slice', { opacity: 0, duration: 0.24, ease: 'power2.out' }, 0.84)
-            .to('.melting-time-transition-sheen', { opacity: 0, duration: 0.22, ease: 'power2.out' }, 0.88)
-            .to(memoryGrain, { opacity: 0.16, duration: 0.26, ease: 'none' }, 0.9)
-            .to(meltField, { opacity: 0, duration: 0.24, ease: 'power2.out' }, 0.9);
+          const crystalEntrance = gsap.timeline({ paused: true });
+          crystalEntrance
+            .to(crystalScene, {
+              opacity: 1,
+              scale: 1,
+              filter: 'blur(0px)',
+              duration: 1.35,
+              ease: 'expo.out',
+            }, 0)
+            .to(crystalChars, {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              filter: 'blur(0px)',
+              duration: 1.35,
+              stagger: 0.1,
+              ease: 'expo.out',
+            }, 0.48)
+            .to(crystalSubtitle, {
+              opacity: 1,
+              y: 0,
+              filter: 'blur(0px)',
+              duration: 1.3,
+              ease: 'expo.out',
+            }, 0.72);
+
+          const finaleSection = root.querySelector<HTMLElement>('.melting-time-crystal-finale');
+          const playCrystalEntrance = () => {
+            if (crystalEntrance.progress() === 0) crystalEntrance.play();
+          };
+          const playCrystalEntranceIfReached = () => {
+            if (finaleSection && finaleSection.getBoundingClientRect().top <= window.innerHeight * 0.8) {
+              playCrystalEntrance();
+            }
+          };
+          ScrollTrigger.create({
+            trigger: finaleSection,
+            start: 'top 80%',
+            end: 'bottom top',
+            onEnter: playCrystalEntrance,
+            onEnterBack: playCrystalEntrance,
+            onUpdate: (self) => {
+              if (self.progress > 0) playCrystalEntrance();
+            },
+            onRefresh: playCrystalEntranceIfReached,
+          });
+          window.requestAnimationFrame(playCrystalEntranceIfReached);
         }
       }, root);
 
@@ -2158,57 +2071,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         </div>
       </div>
 
-      <section className="melting-time-content-section relative z-10 flex min-h-screen w-screen items-center justify-center overflow-hidden px-6 py-16">
-        <div className="melting-time-content-backdrop" aria-hidden="true" />
-        <div className="melting-time-transition-field" aria-hidden="true">
-          <div className="melting-time-transition-veil" />
-          <div className="melting-time-memory-grain" />
-          <div className="melting-time-melt-field">
-            <div className="melting-time-memory-slit">
-              <div className="melting-time-memory-film" />
-            </div>
-          </div>
-          <div className="melting-time-transition-line" />
-          <div className="melting-time-transition-sheen" />
-          <div className="melting-time-memory-drips">
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-            <span className="melting-time-memory-drip" />
-          </div>
-          <div className="melting-time-transition-slices">
-            <span className="melting-time-transition-slice" />
-            <span className="melting-time-transition-slice" />
-            <span className="melting-time-transition-slice" />
-            <span className="melting-time-transition-slice" />
-            <span className="melting-time-transition-slice" />
-          </div>
-        </div>
-        <div className="melting-time-final-liquid" aria-hidden="true">
-          <span className="melting-time-final-liquid-sheet" />
-          <span className="melting-time-final-liquid-sheet" />
-          <span className="melting-time-final-liquid-sheet" />
-        </div>
-        <div className="melting-time-content-wrapper flex max-w-5xl flex-col items-center text-center opacity-0">
-          <h2 className="melting-time-hero-title mb-10 text-[clamp(4.5rem,12vw,9rem)] font-semibold leading-[1.02] tracking-[-0.05em]">
-            <span className="melting-time-title-base">鹽埕的冰</span>
-            <span className="melting-time-title-liquid-layer" data-title="鹽埕的冰" aria-hidden="true">
-              鹽埕的冰
-            </span>
-          </h2>
-          <div className="melting-time-award-pill inline-flex items-center gap-2 rounded-full border border-[#FFD60A]/20 bg-[#FFD60A]/5 px-5 py-2 text-[11px] uppercase tracking-[0.2em] text-[#FFD60A] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] backdrop-blur-2xl max-[520px]:max-w-[92vw] max-[520px]:flex-wrap max-[520px]:justify-center max-[520px]:text-[10px]">
-            <Trophy size={14} strokeWidth={2} aria-hidden="true" />
-            <span>中華民國微電影協會 — 金獎 (AI 生成類)</span>
-          </div>
-        </div>
-      </section>
+      <MeltingTimeCrystalFinale />
     </section>
   );
 };
