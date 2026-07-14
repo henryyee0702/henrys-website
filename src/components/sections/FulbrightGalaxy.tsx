@@ -6,6 +6,9 @@ import { X, Play, Pause, ArrowRight, RotateCcw } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { EPISODES } from '@/content/fulbright-episodes';
 import type { EpisodeNode } from '@/content/fulbright-episodes';
+import { SecretDividerHandle } from '@/components/sections/fulbright/SecretDividerHandle';
+import { preloadUmbraVisual, UmbraExperience } from '@/components/sections/fulbright/UmbraExperience';
+import type { UmbraOrigin, UmbraSceneSnapshot } from '@/components/sections/fulbright/umbra-types';
 
 // ==========================================
 // 1. Configuration
@@ -256,6 +259,7 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
   return (
     <div
       ref={rootRef}
+      data-planet-node={node.id}
       role="button"
       tabIndex={isZooming ? -1 : 0}
       aria-label={`檢視故事: ${node.title}`}
@@ -298,6 +302,7 @@ const PlanetNode = forwardRef<PlanetNodeHandle, PlanetNodeProps>(({
 
       <div
         ref={bodyRef}
+        data-planet-body={node.id}
         className={`absolute top-1/2 left-1/2 rounded-full bg-gradient-to-br ${node.color}`}
         style={{
           width: node.size,
@@ -347,18 +352,24 @@ export const FulbrightGalaxy: React.FC = () => {
   const [hoveredPlanet, setHoveredPlanet] = useState<string | null>(null);
   const [isUserPaused, setIsUserPaused] = useState(false);
   const [windowWidth, setWindowWidth] = useState(1200);
+  const [windowHeight, setWindowHeight] = useState(800);
   const [scale, setScale] = useState(1);
+  const [umbraScene, setUmbraScene] = useState<UmbraSceneSnapshot | null>(null);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const lowPower = windowWidth < CONFIG.LAYOUT.MD_BREAKPOINT || isCoarsePointer;
+  const compactLayout = windowWidth < CONFIG.LAYOUT.MD_BREAKPOINT || (isCoarsePointer && windowHeight < 620);
+  const umbraActive = umbraScene !== null;
 
   const planetRefs = useRef<Record<string, PlanetNodeHandle | null>>({});
   const sectionRef = useRef<HTMLElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const cameraWrapperRef = useRef<HTMLDivElement>(null);
   const scrollPanelRef = useRef<HTMLDivElement>(null);
+  const mobileSunTargetRef = useRef<HTMLDivElement>(null);
+  const pauseBeforeUmbraRef = useRef(false);
 
-  const panelWidth = windowWidth >= CONFIG.LAYOUT.MD_BREAKPOINT ? Math.round(windowWidth * 2 / 3) : windowWidth;
+  const panelWidth = compactLayout ? windowWidth : Math.round(windowWidth * 2 / 3);
 
   const physicalZ = useRef({ ...INITIAL_PHYSICAL_Z });
   const physicalScale = useRef({ ...INITIAL_PHYSICAL_SCALE });
@@ -372,7 +383,8 @@ export const FulbrightGalaxy: React.FC = () => {
     isActuallyPlaying: boolean;
     hoveredPlanet: string | null;
     activeArticle: EpisodeNode | null;
-  }>({ phase: 'idle', targetId: null, isActuallyPlaying: true, hoveredPlanet: null, activeArticle: null });
+    umbraActive: boolean;
+  }>({ phase: 'idle', targetId: null, isActuallyPlaying: true, hoveredPlanet: null, activeArticle: null, umbraActive: false });
 
   const speedMultiplier = useRef(CONFIG.TIMING.NORMAL_MULTIPLIER);
   const targetSpeedMultiplier = useRef(CONFIG.TIMING.NORMAL_MULTIPLIER);
@@ -382,16 +394,18 @@ export const FulbrightGalaxy: React.FC = () => {
     stateRefs.current = {
       phase: machineState.phase,
       targetId: machineState.targetId,
-      isActuallyPlaying: !isUserPaused && !hoveredPlanet,
+      isActuallyPlaying: !isUserPaused && !hoveredPlanet && !umbraActive,
       hoveredPlanet,
       activeArticle: machineState.activeArticle,
+      umbraActive,
     };
-  }, [machineState.phase, machineState.targetId, isUserPaused, hoveredPlanet, machineState.activeArticle]);
+  }, [machineState.phase, machineState.targetId, isUserPaused, hoveredPlanet, machineState.activeArticle, umbraActive]);
 
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
       setWindowWidth(w);
+      setWindowHeight(window.innerHeight);
       setScale(Math.min(1.1, Math.min(w, window.innerHeight) / CONFIG.LAYOUT.SYS_MAX_SIZE));
     };
     window.addEventListener('resize', handleResize);
@@ -400,10 +414,28 @@ export const FulbrightGalaxy: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const backgroundRegions = Array.from(section.querySelectorAll<HTMLElement>('[data-umbra-background]'));
+    backgroundRegions.forEach((element) => {
+      element.inert = umbraActive;
+    });
+    return () => {
+      backgroundRegions.forEach((element) => {
+        element.inert = false;
+      });
+    };
+  }, [umbraActive]);
+
+  useEffect(() => {
     targetSpeedMultiplier.current = machineState.phase === 'pullback'
       ? CONFIG.TIMING.SPEED_UP_MULTIPLIER
       : CONFIG.TIMING.NORMAL_MULTIPLIER;
   }, [machineState.phase]);
+
+  const handleUmbraIntent = useCallback(() => {
+    void preloadUmbraVisual(!compactLayout);
+  }, [compactLayout]);
 
   const advancePhase = useCallback((expectedPhase: string) => {
     setMachineState((prev) => {
@@ -455,7 +487,7 @@ export const FulbrightGalaxy: React.FC = () => {
     }
 
     const loop = (timestamp: number) => {
-      if (!isSectionVisible || document.hidden) {
+      if (!isSectionVisible || document.hidden || stateRefs.current.umbraActive) {
         lastTime = timestamp;
         reqId = requestAnimationFrame(loop);
         return;
@@ -561,6 +593,62 @@ export const FulbrightGalaxy: React.FC = () => {
     setMachineState((prev) => ({ ...prev, activeArticle: null }));
   };
 
+  const getUmbraTargetRect = useCallback(() => {
+    if (compactLayout) {
+      return mobileSunTargetRef.current?.getBoundingClientRect() || null;
+    }
+    return planetRefs.current['1']?.body?.getBoundingClientRect() || null;
+  }, [compactLayout]);
+
+  const launchUmbra = useCallback((origin: UmbraOrigin) => {
+    const sectionRect = sectionRef.current?.getBoundingClientRect();
+    const sunRect = planetRefs.current['1']?.body?.getBoundingClientRect();
+    if (!sectionRect || !sunRect || sectionRect.width <= 0 || sectionRect.height <= 0) return;
+
+    const viewportWidth = Math.max(1, window.innerWidth);
+    const viewportHeight = Math.max(1, window.innerHeight);
+    const normalizeX = (clientX: number) => clientX / viewportWidth;
+    const normalizeY = (clientY: number) => clientY / viewportHeight;
+    const triggerClientX = sectionRect.left + origin.x * sectionRect.width;
+    const triggerClientY = sectionRect.top + origin.y * sectionRect.height;
+    const bodies = EPISODES.flatMap((node) => {
+      const rect = planetRefs.current[node.id]?.body?.getBoundingClientRect();
+      if (!rect) return [];
+      return [{
+        id: node.id,
+        label: `EP ${node.id}`,
+        x: normalizeX(rect.left + rect.width / 2),
+        y: normalizeY(rect.top + rect.height / 2),
+        sizePx: Math.max(5, Math.sqrt(Math.max(1, rect.width * rect.height))),
+        color: node.umbraColor,
+        glow: node.glow,
+        hasRing: Boolean(node.hasRing),
+      }];
+    });
+
+    if (bodies.length !== EPISODES.length) return;
+    setHoveredPlanet(null);
+    pauseBeforeUmbraRef.current = isUserPaused;
+    setIsUserPaused(true);
+    setUmbraScene({
+      trigger: {
+        x: normalizeX(triggerClientX),
+        y: normalizeY(triggerClientY),
+      },
+      sink: {
+        x: normalizeX(sunRect.left + sunRect.width / 2),
+        y: normalizeY(sunRect.top + sunRect.height / 2),
+      },
+      viewport: { width: viewportWidth, height: viewportHeight },
+      bodies,
+    });
+  }, [isUserPaused]);
+
+  const dismissUmbra = useCallback(() => {
+    setUmbraScene(null);
+    setIsUserPaused(pauseBeforeUmbraRef.current);
+  }, []);
+
   const getCameraTransitionDuration = () => {
     if (machineState.phase === 'pullback') return `${CONFIG.TIMING.PULLBACK_DURATION}ms`;
     if (machineState.phase === 'pushin') return `${CONFIG.TIMING.PUSHIN_DURATION}ms`;
@@ -569,7 +657,7 @@ export const FulbrightGalaxy: React.FC = () => {
 
   const getCameraTransform = () => {
     const { phase, activeArticle } = machineState;
-    const isMobile = windowWidth < CONFIG.LAYOUT.MD_BREAKPOINT;
+    const isMobile = compactLayout;
 
     if (phase === 'pullback') return `scale(${scale * CONFIG.CAMERA.PULLBACK.scale}) rotateX(${CONFIG.CAMERA.PULLBACK.rotateX}deg) translateY(${CONFIG.CAMERA.PULLBACK.y}px)`;
     if (phase === 'pushin') return `scale(${scale * CONFIG.CAMERA.PUSHIN.scale}) rotateX(${CONFIG.CAMERA.PUSHIN.rotateX}deg) translateY(${CONFIG.CAMERA.PUSHIN.y}px)`;
@@ -596,13 +684,35 @@ export const FulbrightGalaxy: React.FC = () => {
   const nextArticleNode = currentIndex >= 0 && currentIndex < EPISODES.length - 1 ? EPISODES[currentIndex + 1] : null;
 
   return (
-    <section ref={sectionRef} id="fulbright-galaxy" className="relative h-[100svh] overflow-hidden border-y border-white/[0.05] bg-[#020308] md:h-screen">
+    <section
+      ref={sectionRef}
+      id="fulbright-galaxy"
+      data-umbra-active={umbraActive}
+      className="relative h-[100svh] overflow-hidden border-y border-white/[0.05] bg-[#020308] md:h-screen"
+    >
       <style>{`
         .preserve-3d { transform-style: preserve-3d; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        .umbra-probe__core,
+        .umbra-probe__telemetry { transition: opacity 300ms ease, border-color 300ms ease, box-shadow 300ms ease; }
+        .umbra-probe:hover .umbra-probe__core,
+        .umbra-probe:focus-visible .umbra-probe__core { border-color: rgba(255,255,255,.62); box-shadow: 0 0 22px rgba(255,255,255,.15); }
+        .umbra-probe[data-probe-state=dragging] .umbra-probe__core { border-color: rgba(245,218,157,.72); box-shadow: 0 0 24px rgba(245,190,91,.17); }
+        .umbra-probe[data-probe-state=holding] .umbra-probe__core { border-color: rgba(255,229,173,.92); box-shadow: 0 0 28px rgba(255,194,74,.38), inset 0 0 10px rgba(255,255,255,.12); }
+        .umbra-probe[data-probe-state=holding] .umbra-probe__telemetry { display: block; }
+        .umbra-hold-progress { appearance: none; border: 0; background: rgba(255,255,255,.12); }
+        .umbra-hold-progress::-webkit-progress-bar { background: rgba(255,255,255,.12); }
+        .umbra-hold-progress::-webkit-progress-value { background: rgba(246,217,147,.8); box-shadow: 0 0 8px rgba(246,217,147,.45); }
+        .umbra-hold-progress::-moz-progress-bar { background: rgba(246,217,147,.8); }
+        .fulbright-world,
+        .fulbright-article-plane article { transition: opacity 2.8s cubic-bezier(.16,1,.3,1), filter 2.8s cubic-bezier(.16,1,.3,1), transform 2.8s cubic-bezier(.16,1,.3,1); }
+        #fulbright-galaxy[data-umbra-active=true] .fulbright-world { opacity: .58; filter: brightness(.42) saturate(.62); }
+        #fulbright-galaxy[data-umbra-active=true] [data-planet-node],
+        #fulbright-galaxy[data-umbra-active=true] [data-orbit-ring] { opacity: 0 !important; }
+        #fulbright-galaxy[data-umbra-active=true] .fulbright-article-plane article { opacity: .78; filter: brightness(.68); transform: translate3d(-14px,0,0) scaleX(.985); transform-origin: 0 50%; }
       `}</style>
 
       {/* Background layers */}
@@ -620,10 +730,11 @@ export const FulbrightGalaxy: React.FC = () => {
 
       {/* Solar system */}
       <main
-        className="absolute inset-0 flex items-center justify-center ease-[cubic-bezier(0.16,1,0.3,1)]"
+        data-umbra-background
+        className="fulbright-world absolute inset-0 flex items-center justify-center ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
           perspective: '1200px',
-          transform: machineState.activeArticle && machineState.phase === 'idle' && windowWidth >= CONFIG.LAYOUT.MD_BREAKPOINT
+          transform: machineState.activeArticle && machineState.phase === 'idle' && !compactLayout
             ? `translateX(-${panelWidth / 2}px)`
             : 'translateX(0px)',
           transitionDuration: `${CONFIG.TIMING.DEFAULT_TRANSITION}ms`,
@@ -646,6 +757,7 @@ export const FulbrightGalaxy: React.FC = () => {
             {!lowPower && EPISODES.filter((n) => !n.isSun).map((node) => (
               <div
                 key={`orbit-${node.id}`}
+                data-orbit-ring={node.id}
                 className={`absolute top-0 left-0 rounded-full border border-white/15 pointer-events-none transition-opacity duration-1000 ${
                   machineState.targetId && machineState.phase === 'pushin' ? 'opacity-0' : 'opacity-100'
                 }`}
@@ -678,16 +790,28 @@ export const FulbrightGalaxy: React.FC = () => {
         </div>
       </main>
 
+      <SecretDividerHandle
+        visible={Boolean(machineState.activeArticle) && machineState.phase === 'idle' && !umbraActive}
+        enabled={Boolean(machineState.activeArticle?.isSun)}
+        panelLeft={windowWidth - panelWidth}
+        isMobile={compactLayout}
+        sectionRef={sectionRef}
+        getTargetRect={getUmbraTargetRect}
+        onIntent={handleUmbraIntent}
+        onComplete={launchUmbra}
+      />
+
       {/* Article panel */}
       <aside
+        data-umbra-background
         aria-hidden={!machineState.activeArticle}
-        className={`absolute top-0 right-0 h-full w-full max-w-full bg-[#030408]/90 backdrop-blur-3xl md:border-l border-white/10
+        className={`fulbright-article-plane absolute top-0 right-0 h-full w-full max-w-full bg-[#030408]/90 backdrop-blur-3xl md:border-l border-white/10
           ease-[cubic-bezier(0.16,1,0.3,1)] z-50 shadow-[-40px_0_80px_rgba(0,0,0,0.8)]
           ${machineState.activeArticle && machineState.phase === 'idle' ? 'translate-x-0' : 'translate-x-full'}`}
         style={{
           transitionDuration: `${CONFIG.TIMING.PANEL_DURATION}ms`,
           transitionProperty: 'transform',
-          ...(windowWidth >= CONFIG.LAYOUT.MD_BREAKPOINT ? { width: `${panelWidth}px` } : {}),
+          ...(!compactLayout ? { width: `${panelWidth}px` } : { width: '100%' }),
         }}
       >
         {machineState.activeArticle && (
@@ -695,6 +819,8 @@ export const FulbrightGalaxy: React.FC = () => {
             <header className="flex justify-between items-center px-8 py-8 md:px-12 md:py-10 border-b border-white/[0.05] shrink-0">
               <div className="flex items-center gap-4">
                 <div
+                  ref={machineState.activeArticle.isSun ? mobileSunTargetRef : undefined}
+                  data-umbra-target={machineState.activeArticle.isSun ? 'sun' : undefined}
                   className={`w-3 h-3 rounded-full bg-gradient-to-br ${machineState.activeArticle.color}`}
                   style={{ boxShadow: `0 0 12px ${machineState.activeArticle.glow}` }}
                 />
@@ -787,7 +913,7 @@ export const FulbrightGalaxy: React.FC = () => {
       </div>
 
       {/* Controls - Bottom Right */}
-      <div className="absolute bottom-6 right-6 md:bottom-8 md:right-10 z-20 flex gap-6 text-neutral-500">
+      <div data-umbra-background className="absolute bottom-6 right-6 md:bottom-8 md:right-10 z-20 flex gap-6 text-neutral-500">
         <button
           onClick={() => setIsUserPaused(!isUserPaused)}
           className="group hover:text-white transition-colors flex items-center gap-3 text-[9px] tracking-[0.2em] uppercase font-light"
@@ -799,6 +925,8 @@ export const FulbrightGalaxy: React.FC = () => {
           {isUserPaused ? '繼續' : '暫停'}
         </button>
       </div>
+
+      {umbraScene && <UmbraExperience scene={umbraScene} onDismiss={dismissUmbra} />}
     </section>
   );
 };

@@ -14,6 +14,7 @@ export interface EpisodeNode {
   size: number;
   color: string;
   glow: string;
+  umbraColor: string;
   isSun?: boolean;
   hasRing?: boolean;
   excerpt: string;
@@ -25,7 +26,7 @@ export interface EpisodeNode {
 export const EPISODES: EpisodeNode[] = [
   {
     id: '1', title: 'Ep 1: 整飛機的白眼', planet: 'Sun', radius: 0, speed: 0, size: 56,
-    color: 'from-yellow-100 via-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.8)', isSun: true,
+    color: 'from-yellow-100 via-yellow-300 to-orange-500', glow: 'rgba(253, 224, 71, 0.8)', umbraColor: '#ffd76b', isSun: true,
     excerpt: '十秒鐘只有引擎聲的沈默。她的眼睛微微一怔，緊接著，我們倆幾乎同時開始放聲大笑...',
     content: `突然想起了Crystal.
 
@@ -71,7 +72,7 @@ export const EPISODES: EpisodeNode[] = [
   },
   {
     id: '2', title: 'Ep 2: 危機將至', planet: 'Mercury', radius: 80, speed: 0.005, size: 12,
-    color: 'from-neutral-400 to-neutral-600', glow: 'rgba(163, 163, 163, 0.5)',
+    color: 'from-neutral-400 to-neutral-600', glow: 'rgba(163, 163, 163, 0.5)', umbraColor: '#c2c5ca',
     excerpt: '號稱台大派、成大派和中山派的武林代表的我們，眼前竟已騎虎難下...',
     content: `飛機落地，華盛頓機場人山人海。我們興沖沖地拖著大包小包的行李準備叫計程車前往飯店。殊不知，一場危機正在逐漸醞釀。
 
@@ -121,7 +122,7 @@ export const EPISODES: EpisodeNode[] = [
   },
   {
     id: '3', title: 'Ep 3: 未知的語言', planet: 'Venus', radius: 120, speed: 0.0035, size: 16,
-    color: 'from-yellow-500 to-orange-600', glow: 'rgba(234, 179, 8, 0.5)',
+    color: 'from-yellow-500 to-orange-600', glow: 'rgba(234, 179, 8, 0.5)', umbraColor: '#f2a334',
     excerpt: '沒想到，被公認為四人組中英文最頂尖的絲昀，一時之間竟也難以招架...',
     content: `夜晚的華盛頓機場外，只見兩人正用特有的語言激烈爭吵著。他們的語速節奏極快，聲音中帶著濃重的喉音與爆破感。
 
@@ -155,7 +156,7 @@ Crystal 用手肘推了推我，似乎很看得起我的英文聽力。但我們
   },
   {
     id: '4', title: 'Ep 4: 從未用過的單字', planet: 'Earth', radius: 170, speed: 0.0028, size: 18,
-    color: 'from-blue-400 to-emerald-500', glow: 'rgba(59, 130, 246, 0.6)',
+    color: 'from-blue-400 to-emerald-500', glow: 'rgba(59, 130, 246, 0.6)', umbraColor: '#59d7cf',
     excerpt: '一開始幫我們搬行李的機場老兄正用貪婪的眼神，死死地盯著我們...',
     content: `"You're going to Baltimore?"
 "Yeah, the hotel at UMD, Baltimore Avenue. "
@@ -189,7 +190,7 @@ Crystal 用手肘推了推我，似乎很看得起我的英文聽力。但我們
   },
   {
     id: '5', title: 'Ep 5: 四十美金的沉默', planet: 'Mars', radius: 220, speed: 0.0022, size: 14,
-    color: 'from-red-500 to-orange-700', glow: 'rgba(239, 68, 68, 0.5)',
+    color: 'from-red-500 to-orange-700', glow: 'rgba(239, 68, 68, 0.5)', umbraColor: '#ef4f3d',
     excerpt: '原來號稱中山派掌門人的曾品翰，此刻竟怕得要死...',
     content: `「呃…完蛋了，要給多少啊🥶」
 
@@ -243,7 +244,7 @@ Crystal 第一個跳腳。正要抗議，卻聽見我壓低了聲音，對絲昀
   },
   {
     id: '6', title: 'Ep 6: 偏離軌道', planet: 'Jupiter', radius: 280, speed: 0.0016, size: 32,
-    color: 'from-orange-300 to-amber-700', glow: 'rgba(217, 119, 6, 0.5)',
+    color: 'from-orange-300 to-amber-700', glow: 'rgba(217, 119, 6, 0.5)', umbraColor: '#e79a51',
     excerpt: '「我在網路上看到的詐騙計程車也有一模一樣的。」...',
     content: `計程車上，低沉的引擎聲轟隆隆地作響。我看向駕駛座，一個碩大的平板顯示著地圖和跳表的軟體。
 
@@ -275,7 +276,7 @@ Crystal 也趕緊負荷：
   },
   {
     id: '7', title: 'Ep 7: 生命的十字路口', planet: 'Saturn', radius: 350, speed: 0.001, size: 26,
-    color: 'from-yellow-200 to-yellow-600', glow: 'rgba(234, 179, 8, 0.4)', hasRing: true,
+    color: 'from-yellow-200 to-yellow-600', glow: 'rgba(234, 179, 8, 0.4)', umbraColor: '#e8c95f', hasRing: true,
     excerpt: '一片駭人的沈默。周遭只剩下「唰、唰」的雨刷聲和轟隆隆的引擎聲。計程車因為紅燈停了下來...',
     content: `近乎同時，Sam再一次開口打破了寧靜。而他的語氣，明顯多了一份緊張。
 
@@ -306,7 +307,7 @@ Crystal 又道，似乎是想緩解一下大家心中的焦慮。
   },
   {
     id: '8', title: 'Ep 8: 鬼門關前', planet: 'Uranus', radius: 410, speed: 0.0007, size: 20,
-    color: 'from-cyan-300 to-blue-500', glow: 'rgba(34, 211, 238, 0.5)',
+    color: 'from-cyan-300 to-blue-500', glow: 'rgba(34, 211, 238, 0.5)', umbraColor: '#55c7ec',
     excerpt: '我們大吃一驚，計程車迴轉帶來的巨大慣性將我們四人拋向一邊...',
     content: `計程車搖晃了一陣，停頓了幾下。司機雙手來回交錯——左轉了！
 
@@ -343,7 +344,7 @@ Crystal 又道，似乎是想緩解一下大家心中的焦慮。
   },
   {
     id: '9', title: 'Ep 9: 患難之情', planet: 'Neptune', radius: 470, speed: 0.0005, size: 20,
-    color: 'from-blue-600 to-indigo-800', glow: 'rgba(59, 130, 246, 0.5)',
+    color: 'from-blue-600 to-indigo-800', glow: 'rgba(59, 130, 246, 0.5)', umbraColor: '#4059d6',
     excerpt: '馬里蘭幫的四人繃緊了神經，就連在站一旁的老師們也凝重地望著司機...',
     content: `忽然，司機輕咳了一聲。而我們的心裡都早有預感——
 

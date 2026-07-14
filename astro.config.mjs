@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // https://astro.build/config
 export default defineConfig({
   site: process.env.SITE_URL || 'https://pinhantseng.com',
+  devToolbar: { enabled: false },
   integrations: [
     react(),
     sitemap({

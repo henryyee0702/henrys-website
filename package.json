@@ -12,6 +12,7 @@
     "preview": "astro preview",
     "check": "astro check",
     "lint": "eslint .",
+    "archive:encrypt": "node scripts/build-umbra-archive.mjs",
     "astro": "astro"
   },
   "dependencies": {

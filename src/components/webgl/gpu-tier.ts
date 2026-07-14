@@ -110,9 +110,11 @@ export function detectGpuTier(): GpuProfile {
     return PROFILES.reduced;
   }
 
-  // 6. Touch-primary small screen
+  // 6. Touch-primary phones, including landscape orientation
   const isTouchPrimary = window.matchMedia('(pointer: coarse)').matches;
-  if (isTouchPrimary && window.screen.width <= 820) {
+  const shortScreenEdge = Math.min(window.screen.width, window.screen.height);
+  const shortViewportEdge = Math.min(window.innerWidth, window.innerHeight);
+  if (isTouchPrimary && (shortScreenEdge <= 820 || shortViewportEdge <= 620)) {
     return PROFILES.reduced;
   }
 

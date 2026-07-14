@@ -4,7 +4,7 @@ import astro from 'eslint-plugin-astro';
 
 export default [
   // Global ignores
-  { ignores: ['dist/', 'references/', '.astro/', 'test-results/', '.artifacts/'] },
+  { ignores: ['dist/', 'references/', '.astro/', '.vercel/', 'test-results/', '.artifacts/'] },
 
   // Base JS/TS rules — errors only, no style nits
   js.configs.recommended,
