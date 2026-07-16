@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { UmbraOrigin } from './umbra-types';
 
-const HOLD_DURATION_MS = 7020;
+const DISPLAY_DURATION_SECONDS = 7.02;
+const HOLD_SPEED_MULTIPLIER = 2;
+const HOLD_DURATION_MS = (DISPLAY_DURATION_SECONDS * 1000) / HOLD_SPEED_MULTIPLIER;
 const TARGET_PADDING = 22;
 
 interface SecretDividerHandleProps {
@@ -52,7 +54,7 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
 
   const paintProgress = useCallback((progress: number) => {
     if (progressRef.current) progressRef.current.value = progress;
-    if (timeRef.current) timeRef.current.textContent = `${(progress * 7.02).toFixed(2)} S`;
+    if (timeRef.current) timeRef.current.textContent = `${(progress * DISPLAY_DURATION_SECONDS).toFixed(2)} S`;
   }, []);
 
   const cancelHold = useCallback(() => {
