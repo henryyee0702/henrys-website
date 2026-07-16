@@ -37,6 +37,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
     const gpu = detectGpuTier();
     const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
     const reducedBudget = gpu.tier !== 'full' || isCoarsePointer;
+    const fullInlineEffect = variant === 'inline';
     const maxDpr = reducedBudget ? (variant === 'inline' ? 1.15 : 1) : (variant === 'inline' ? 2 : 1.5);
 
     const scene = new THREE.Scene();
@@ -123,11 +124,11 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
         uVelocity: { value: 0 },
         uBaseRadius: { value: 0.12 },
         uVelocityRadius: { value: 0.15 },
-        uRippleStrength: { value: reducedBudget ? 0.025 : 0.05 },
-        uDistortionStrength: { value: reducedBudget ? 0.08 : 0.15 },
-        uChromaticStrength: { value: reducedBudget ? 0.024 : 0.05 },
-        uVelocityChromaticStrength: { value: reducedBudget ? 0.01 : 0.02 },
-        uSpecularStrength: { value: reducedBudget ? 0.24 : 0.4 },
+        uRippleStrength: { value: fullInlineEffect || !reducedBudget ? 0.05 : 0.025 },
+        uDistortionStrength: { value: fullInlineEffect || !reducedBudget ? 0.15 : 0.08 },
+        uChromaticStrength: { value: fullInlineEffect || !reducedBudget ? 0.05 : 0.024 },
+        uVelocityChromaticStrength: { value: fullInlineEffect || !reducedBudget ? 0.02 : 0.01 },
+        uSpecularStrength: { value: fullInlineEffect || !reducedBudget ? 0.4 : 0.24 },
       },
       transparent: true
     });
@@ -235,7 +236,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
       if (
         !isVisibleRef.current ||
         shouldThrottleFrame(frameCount++, idleTracker.idle, {
-          activeFrameInterval: reducedBudget ? 2 : 1,
+          activeFrameInterval: fullInlineEffect ? 1 : reducedBudget ? 2 : 1,
           idleFrameInterval: reducedBudget ? 8 : 4,
         })
       ) return;

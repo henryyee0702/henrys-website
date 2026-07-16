@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/anton-v27-latin-regular.woff2') format('woff2');
+}
+
 @layer base {
   body {
     @apply bg-background text-foreground antialiased selection:bg-white/20 selection:text-white;

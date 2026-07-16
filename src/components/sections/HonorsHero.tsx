@@ -102,7 +102,7 @@ export const HonorsHero: React.FC = () => {
           <h2
             ref={titleRef}
             className="block ml-[-0.085em] whitespace-nowrap text-[clamp(5.8rem,33vw,28rem)] leading-[0.9] tracking-[-0.05em] text-white will-change-[transform,opacity]"
-            style={{ fontFamily: '"Anton", sans-serif' }}
+            style={{ fontFamily: '"Anton", sans-serif', fontWeight: 400, fontSynthesis: 'none' }}
           >
             HONORS
           </h2>

@@ -380,11 +380,10 @@ export const LiquidStatement: React.FC = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-  const coarsePointer = useMediaQuery('(pointer: coarse)');
   const gpu = useGpuTier();
-  const reducedEffects = reducedMotion || coarsePointer || gpu.tier === 'fallback';
+  const reducedEffects = reducedMotion || gpu.tier === 'fallback';
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
     mouseX.set(e.clientX);
     mouseY.set(e.clientY);
   };
@@ -394,7 +393,7 @@ export const LiquidStatement: React.FC = () => {
       ref={sectionRef}
       id="liquid-statement"
       className="relative w-full min-h-[58vh] scroll-mt-[8.5rem] min-[394px]:max-[430px]:min-h-[64vh] min-[768px]:max-[1024px]:min-h-[72vh] lg:min-h-[84vh] overflow-hidden border-y border-white/[0.05] bg-[#050505]"
-      onMouseMove={reducedEffects ? undefined : handleMouseMove}
+      onPointerMove={reducedEffects ? undefined : handlePointerMove}
     >
       <ElectromagneticField mouseX={mouseX} mouseY={mouseY} />
       <div className="relative z-10 mx-auto flex w-full max-w-[1540px] flex-col gap-12 px-4 py-8 min-[394px]:max-[430px]:gap-14 min-[394px]:max-[430px]:px-5 min-[394px]:max-[430px]:py-10 min-[768px]:max-[1024px]:gap-16 min-[768px]:max-[1024px]:px-8 min-[768px]:max-[1024px]:py-16 md:px-6 md:py-16 lg:gap-20 lg:px-10 lg:py-20">
@@ -417,7 +416,7 @@ export const LiquidStatement: React.FC = () => {
         <div data-statement-panel className="rounded-[2rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02))] px-5 py-8 shadow-[0_24px_90px_rgba(0,0,0,0.22)] backdrop-blur-[24px] min-[394px]:max-[430px]:px-6 min-[394px]:max-[430px]:py-9 min-[768px]:max-[1024px]:px-8 min-[768px]:max-[1024px]:py-10 lg:rounded-[2.25rem] lg:px-10 lg:py-12">
           <div className="mx-auto flex w-full max-w-[980px] flex-col items-center justify-center gap-4 text-center min-[768px]:max-[1024px]:gap-5 md:gap-6">
             <div className="space-y-3 min-[768px]:max-[1024px]:space-y-4 md:space-y-[1.125rem]">
-              <p data-statement-title className="flex flex-wrap items-baseline justify-center gap-x-[0.18em] gap-y-2 text-center text-[clamp(2.3rem,5vw,4.9rem)] leading-[0.95] text-[#F5F5F7]">
+              <div data-statement-title className="flex flex-wrap items-baseline justify-center gap-x-[0.18em] gap-y-2 text-center text-[clamp(2.3rem,5vw,4.9rem)] leading-[0.95] text-[#F5F5F7]">
                 <span className="inline-flex overflow-visible pb-[0.14em] pr-[0.02em]">
                   <EngineerElectricWord reducedMotion={reducedEffects} wordClassName={WORD_CLASS} />
                 </span>
@@ -433,7 +432,7 @@ export const LiquidStatement: React.FC = () => {
                     wordClassName={WORD_CLASS}
                   />
                 </span>
-              </p>
+              </div>
               <p data-statement-subtitle className={STATEMENT_SUBTITLE_CLASS}>
                 {STATEMENT_EN_SUBTITLE}
               </p>
