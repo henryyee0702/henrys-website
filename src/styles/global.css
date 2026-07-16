@@ -10,6 +10,24 @@
   src: url('/fonts/anton-v27-latin-regular.woff2') format('woff2');
 }
 
+@font-face {
+  font-family: 'Noto Serif TC';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/noto-serif-tc-600-melting-award.woff2') format('woff2');
+  unicode-range: U+0020, U+4E2D, U+5354, U+570B, U+5F71, U+5FAE, U+6703, U+6C11, U+734E, U+83EF, U+91D1, U+96FB;
+}
+
+@font-face {
+  font-family: 'Noto Serif TC';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/noto-serif-tc-900-melting-title.woff2') format('woff2');
+  unicode-range: U+51B0, U+57D5, U+7684, U+9E7D;
+}
+
 @layer base {
   body {
     @apply bg-background text-foreground antialiased selection:bg-white/20 selection:text-white;

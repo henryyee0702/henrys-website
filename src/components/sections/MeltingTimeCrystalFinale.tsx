@@ -499,6 +499,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
               color: #ffffff;
               cursor: none;
               font-family: 'Noto Serif TC', serif;
+              font-synthesis: none;
               -webkit-font-smoothing: antialiased;
               -moz-osx-font-smoothing: grayscale;
             }
@@ -572,6 +573,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
               font-family: 'Noto Serif TC', serif;
               font-size: clamp(4rem, 12vw, 9rem);
               font-weight: 900;
+              font-synthesis: none;
               line-height: 1.1;
               letter-spacing: 0.33em;
               text-align: center;
@@ -609,6 +611,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
               font-family: 'Noto Serif TC', serif;
               font-size: clamp(0.75rem, 1.5vw, 1rem);
               font-weight: 600;
+              font-synthesis: none;
               line-height: 1.45;
               letter-spacing: 0.8em;
               text-shadow: 0 4px 10px rgba(0, 0, 0, 0.9), 0 0 25px rgba(245, 215, 110, 0.5), 0 0 40px rgba(245, 215, 110, 0.2);

@@ -21,11 +21,24 @@ const Content = renderedEntry?.Content;
 
 <BaseLayout title={entry.data.title} description={entry.data.description} ogImage={entry.data.ogImage ?? entry.data.coverImage} ogType="article">
   {isMeltingTime && (
-    <link
-      slot="head"
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap"
-    />
+    <>
+      <link
+        slot="head"
+        rel="preload"
+        href="/fonts/noto-serif-tc-900-melting-title.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin="anonymous"
+      />
+      <link
+        slot="head"
+        rel="preload"
+        href="/fonts/noto-serif-tc-600-melting-award.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin="anonymous"
+      />
+    </>
   )}
   <Navigation client:idle />
 
