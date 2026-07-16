@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
-import { MeltingTimeCrystalFinale } from '@/components/sections/MeltingTimeCrystalFinale';
+import {
+  MELTING_TIME_TITLE_DECODE_EVENT,
+  MeltingTimeCrystalFinale,
+} from '@/components/sections/MeltingTimeCrystalFinale';
 
 const ASSETS = {
   macModel: 'https://ksenia-k.com/models/mac-noUv.glb',
@@ -1074,6 +1077,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
             ease: 'power2.out',
           });
 
+          const finaleSection = root.querySelector<HTMLElement>('.melting-time-crystal-finale');
           const crystalEntrance = gsap.timeline({ paused: true });
           crystalEntrance
             .to(crystalScene, {
@@ -1083,6 +1087,9 @@ export const MeltingTimeWorkExperience: React.FC = () => {
               duration: 1.35,
               ease: 'expo.out',
             }, 0)
+            .call(() => {
+              finaleSection?.dispatchEvent(new Event(MELTING_TIME_TITLE_DECODE_EVENT));
+            }, undefined, 0.48)
             .to(crystalChars, {
               opacity: 1,
               y: 0,
@@ -1100,7 +1107,6 @@ export const MeltingTimeWorkExperience: React.FC = () => {
               ease: 'expo.out',
             }, 0.72);
 
-          const finaleSection = root.querySelector<HTMLElement>('.melting-time-crystal-finale');
           const playCrystalEntrance = () => {
             if (crystalEntrance.progress() === 0) crystalEntrance.play();
           };

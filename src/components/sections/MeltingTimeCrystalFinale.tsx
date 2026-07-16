@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -8,6 +8,18 @@ import { shouldThrottleFrame } from '@/lib/adaptive-render';
 
 const FALLBACK_IMAGE = '/images/melting-time-crystal-reference-fallback.png';
 const TITLE_CHARS = ['鹽', '埕', '的', '冰'];
+const TITLE_SCRAMBLE_CHARS = Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789[]{}<>/+*-=!?');
+const TITLE_SCRAMBLE_FRAME_MS = 30;
+const TITLE_DECODE_DURATION_MS = 1_280;
+const TITLE_POINTER_DECAY_MS = 780;
+const TITLE_SETTLE_POINTS = [0.58, 0.72, 0.86, 0.98];
+
+export const MELTING_TIME_TITLE_DECODE_EVENT = 'melting-time:title-decode';
+
+const getScrambledTitleChar = (characterIndex: number, frame: number, run: number) => {
+  const glyphIndex = (frame * 7 + characterIndex * 11 + run * 13) % TITLE_SCRAMBLE_CHARS.length;
+  return TITLE_SCRAMBLE_CHARS[glyphIndex];
+};
 
 const seededRandom = (seed: number) => {
   let state = seed >>> 0;
@@ -76,6 +88,11 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const cursorDotRef = useRef<HTMLDivElement>(null);
   const cursorRingRef = useRef<HTMLDivElement>(null);
+  const titleDecodeFrameRef = useRef(0);
+  const titlePointerFrameRef = useRef(0);
+  const titleDecodeRunRef = useRef(0);
+  const titleDecodeRunningRef = useRef(false);
+  const titlePointerRef = useRef({ x: 0, y: 0, lastMove: -Infinity, frame: -1 });
   const pointerTargetRef = useRef(new THREE.Vector2());
   const cursorTargetRef = useRef(new THREE.Vector2());
   const pointerInsideRef = useRef(false);
@@ -83,8 +100,166 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
   const gpu = useGpuTier();
   const coarsePointer = useMediaQuery('(pointer: coarse)');
   const reducedMotion = Boolean(useReducedMotion());
+  const [displayedTitleChars, setDisplayedTitleChars] = useState(TITLE_CHARS);
   const [shouldInitialize, setShouldInitialize] = useState(false);
   const [renderMode, setRenderMode] = useState<'pending' | 'webgl' | 'fallback'>('pending');
+
+  const restoreTitle = useCallback(() => {
+    setDisplayedTitleChars(TITLE_CHARS);
+    titleRef.current?.removeAttribute('data-scrambling');
+  }, []);
+
+  const runTitleDecode = useCallback(() => {
+    if (reducedMotion) {
+      restoreTitle();
+      return;
+    }
+
+    window.cancelAnimationFrame(titleDecodeFrameRef.current);
+    window.cancelAnimationFrame(titlePointerFrameRef.current);
+    titlePointerFrameRef.current = 0;
+    titleDecodeRunningRef.current = true;
+    const run = ++titleDecodeRunRef.current;
+    const startedAt = window.performance.now();
+    let previousFrame = -1;
+
+    titleRef.current?.setAttribute('data-scrambling', 'true');
+
+    const decode = (now: number) => {
+      if (run !== titleDecodeRunRef.current) return;
+
+      const progress = Math.min(1, (now - startedAt) / TITLE_DECODE_DURATION_MS);
+      const frame = Math.floor((now - startedAt) / TITLE_SCRAMBLE_FRAME_MS);
+
+      if (frame !== previousFrame) {
+        previousFrame = frame;
+        setDisplayedTitleChars(
+          TITLE_CHARS.map((character, index) => (
+            progress >= TITLE_SETTLE_POINTS[index]
+              ? character
+              : getScrambledTitleChar(index, frame, run)
+          )),
+        );
+      }
+
+      if (progress < 1) {
+        titleDecodeFrameRef.current = window.requestAnimationFrame(decode);
+        return;
+      }
+
+      titleDecodeFrameRef.current = 0;
+      titleDecodeRunningRef.current = false;
+      restoreTitle();
+    };
+
+    titleDecodeFrameRef.current = window.requestAnimationFrame(decode);
+  }, [reducedMotion, restoreTitle]);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    const title = titleRef.current;
+    if (!section || !title) return;
+
+    const stopPointerScramble = (restore = true) => {
+      window.cancelAnimationFrame(titlePointerFrameRef.current);
+      titlePointerFrameRef.current = 0;
+      if (restore && !titleDecodeRunningRef.current) restoreTitle();
+    };
+
+    const renderPointerScramble = (now: number) => {
+      if (titleDecodeRunningRef.current) {
+        titlePointerFrameRef.current = 0;
+        return;
+      }
+
+      const pointer = titlePointerRef.current;
+      const strength = Math.max(0, 1 - (now - pointer.lastMove) / TITLE_POINTER_DECAY_MS);
+      if (strength <= 0) {
+        stopPointerScramble();
+        return;
+      }
+
+      const frame = Math.floor(now / TITLE_SCRAMBLE_FRAME_MS);
+      if (frame !== pointer.frame) {
+        pointer.frame = frame;
+        const radius = Math.min(190, Math.max(96, window.innerWidth * 0.18)) * (0.72 + strength * 0.28);
+        const characterElements = Array.from(title.querySelectorAll<HTMLElement>('[data-melting-crystal-char]'));
+        let hasScrambledGlyph = false;
+        const nextChars = TITLE_CHARS.map((character, index) => {
+          const characterRect = characterElements[index]?.getBoundingClientRect();
+          if (!characterRect) return character;
+
+          const centerX = characterRect.left + characterRect.width / 2;
+          const centerY = characterRect.top + characterRect.height / 2;
+          const distance = Math.hypot(pointer.x - centerX, (pointer.y - centerY) * 1.35);
+          const heat = Math.pow(Math.max(0, 1 - distance / radius) * strength, 1.4);
+          const probability = 0.15 + heat * 0.75;
+          const noise = ((frame * 17 + index * 31 + titleDecodeRunRef.current * 13) % 100) / 100;
+
+          if (heat > 0.04 && noise < probability) {
+            hasScrambledGlyph = true;
+            return getScrambledTitleChar(index, frame, titleDecodeRunRef.current + 1);
+          }
+
+          return character;
+        });
+
+        setDisplayedTitleChars((currentChars) => (
+          currentChars.every((character, index) => character === nextChars[index])
+            ? currentChars
+            : nextChars
+        ));
+        if (hasScrambledGlyph) title.setAttribute('data-scrambling', 'true');
+        else title.removeAttribute('data-scrambling');
+      }
+
+      titlePointerFrameRef.current = window.requestAnimationFrame(renderPointerScramble);
+    };
+
+    const startPointerScramble = (event: PointerEvent) => {
+      if (reducedMotion || titleDecodeRunningRef.current) return;
+
+      const titleRect = title.getBoundingClientRect();
+      const activationRadius = Math.min(190, Math.max(96, window.innerWidth * 0.18)) * 1.15;
+      const distanceX = Math.max(titleRect.left - event.clientX, 0, event.clientX - titleRect.right);
+      const distanceY = Math.max(titleRect.top - event.clientY, 0, event.clientY - titleRect.bottom);
+      if (Math.hypot(distanceX, distanceY) > activationRadius) return;
+
+      titlePointerRef.current.x = event.clientX;
+      titlePointerRef.current.y = event.clientY;
+      titlePointerRef.current.lastMove = window.performance.now();
+
+      if (!titlePointerFrameRef.current) {
+        titlePointerFrameRef.current = window.requestAnimationFrame(renderPointerScramble);
+      }
+    };
+
+    const decayPointerScramble = () => {
+      titlePointerRef.current.lastMove = window.performance.now() - TITLE_POINTER_DECAY_MS * 0.28;
+    };
+
+    const replayOnTouch = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') runTitleDecode();
+    };
+
+    const handleDecodeRequest = () => runTitleDecode();
+
+    section.addEventListener(MELTING_TIME_TITLE_DECODE_EVENT, handleDecodeRequest);
+    section.addEventListener('pointermove', startPointerScramble, { passive: true });
+    title.addEventListener('pointerleave', decayPointerScramble);
+    title.addEventListener('pointerdown', replayOnTouch, { passive: true });
+
+    return () => {
+      titleDecodeRunRef.current += 1;
+      titleDecodeRunningRef.current = false;
+      window.cancelAnimationFrame(titleDecodeFrameRef.current);
+      stopPointerScramble(false);
+      section.removeEventListener(MELTING_TIME_TITLE_DECODE_EVENT, handleDecodeRequest);
+      section.removeEventListener('pointermove', startPointerScramble);
+      title.removeEventListener('pointerleave', decayPointerScramble);
+      title.removeEventListener('pointerdown', replayOnTouch);
+    };
+  }, [reducedMotion, restoreTitle, runTitleDecode]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -567,6 +742,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
 
             .melting-time-crystal-title {
               display: flex;
+              align-items: center;
               justify-content: center;
               margin: 0 -0.15em 0 0;
               color: #ffffff;
@@ -581,14 +757,30 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
               transform-style: preserve-3d;
               perspective: 1000px;
               mix-blend-mode: screen;
+              pointer-events: auto;
+              touch-action: pan-y;
               will-change: transform;
             }
 
             .melting-time-crystal-char {
-              display: inline-block;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              block-size: 1.1em;
+              flex: 0 0 1em;
+              inline-size: 1em;
+              margin-inline-end: 0.33em;
               opacity: 0;
+              letter-spacing: normal;
+              text-align: center;
               transform: translateY(40px) scale(0.95);
               will-change: opacity, transform, filter;
+            }
+
+            .melting-time-crystal-char[data-scrambled='true'] {
+              font-family: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+              font-weight: 700;
+              font-synthesis: none;
             }
 
             .melting-time-crystal-bottom-text {
@@ -669,6 +861,10 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
                 text-shadow: 0 12px 30px rgba(0, 0, 0, 0.72), 0 0 34px rgba(255, 255, 255, 0.12);
               }
 
+              .melting-time-crystal-char {
+                margin-inline-end: 0.11em;
+              }
+
               .melting-time-crystal-subtitle {
                 margin-right: -0.55em;
                 font-size: 0.75rem;
@@ -726,15 +922,23 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
         </div>
 
         <div className="melting-time-crystal-ui">
-          <h2 ref={titleRef} id="melting-time-crystal-title" className="melting-time-crystal-title" aria-label="鹽埕的冰">
+          <h2
+            ref={titleRef}
+            id="melting-time-crystal-title"
+            className="melting-time-crystal-title"
+            aria-label="鹽埕的冰"
+            data-melting-crystal-title
+          >
             {TITLE_CHARS.map((character, index) => (
               <span
                 key={`${character}-${index}`}
                 className="melting-time-crystal-char"
                 data-melting-crystal-char
+                data-original-character={character}
+                data-scrambled={displayedTitleChars[index] === character ? undefined : 'true'}
                 aria-hidden="true"
               >
-                {character}
+                {displayedTitleChars[index]}
               </span>
             ))}
           </h2>
