@@ -482,7 +482,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
               </button>
             </div>
             <p id="umbra-gate-description" className="mt-3 text-[8px] uppercase tracking-[0.28em] text-white/30 md:mt-4 md:text-[9px]" style={{ fontFamily: '"JetBrains Mono", monospace' }}>
-              MMDD + HER NAME
+              MMDD SHEEP
             </p>
             <p
               key={`${status}-${attempt}`}
