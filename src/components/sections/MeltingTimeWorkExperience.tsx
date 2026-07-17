@@ -55,6 +55,8 @@ const SHADER = {
     uniform float uRadiusMult;
     uniform float uAlpha;
     uniform float uZoom;
+    uniform float uIceTransition;
+    uniform float uFinaleTransition;
     uniform vec2 uFrameOffset;
     uniform bool uReducedMotion;
     uniform float pBaseRadius;
@@ -109,6 +111,12 @@ const SHADER = {
       return 42.0 * dot(m * m * m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
     }
 
+    float hash21(vec2 value) {
+      vec3 value3 = fract(vec3(value.xyx) * 0.1031);
+      value3 += dot(value3, value3.yzx + 33.33);
+      return fract((value3.x + value3.y) * value3.z);
+    }
+
     void main() {
       vec2 texUv = (vUv - 0.5) * uZoom + 0.5;
       vec2 aspect = vec2(uRes.x / uRes.y, 1.0);
@@ -121,6 +129,9 @@ const SHADER = {
       }
 
       texUv += uFrameOffset;
+      float outgoingDrop = smoothstep(0.08, 0.62, clamp(uFinaleTransition, 0.0, 1.0));
+      texUv = (texUv - 0.5) * mix(1.0, 0.64, pow(outgoingDrop, 1.35)) + 0.5;
+      texUv.y += pow(outgoingDrop, 1.8) * 0.72;
 
       vec2 aUv = vUv * aspect;
       vec2 aMouse = uMouse * aspect;
@@ -150,10 +161,104 @@ const SHADER = {
       vec4 cOld = texture2D(tOld, clamp(texUv - (safeDir * mask * 0.02), 0.0, 1.0));
       vec3 glow = vec3(1.0, 0.3, 0.05) * (smoothstep(0.2, 0.5, mask) - smoothstep(0.5, 0.8, mask)) * 1.2;
       vec3 finalColor = mix(cOld.rgb, cYoung.rgb, smoothstep(0.4, 0.6, mask)) + glow;
+
+      float iceProgress = clamp(uIceTransition, 0.0, 1.0);
+      float iceAttack = smoothstep(0.015, 0.24, iceProgress);
+      float iceRelease = 1.0 - smoothstep(0.64, 0.985, iceProgress);
+      float iceEnergy = uReducedMotion ? 0.0 : iceAttack * iceRelease;
+      float iceAlpha = 0.0;
+
+      if (iceEnergy > 0.001) {
+        vec2 centeredUv = vUv - 0.5;
+        float edgeDistance = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+        float fracturedFront = edgeDistance + n1 * 0.035 + n2 * 0.018;
+        float frontPosition = mix(0.025, 0.37, smoothstep(0.0, 0.62, iceProgress));
+        float edgeField = 1.0 - smoothstep(frontPosition - 0.055, frontPosition + 0.07, fracturedFront);
+        vec2 shardScale = vec2(6.4 * aspect.x, 6.5);
+        vec2 shardUv = vUv * shardScale;
+        shardUv.x += hash21(vec2(floor(shardUv.y), 17.0)) * 0.88;
+        vec2 shardCell = floor(shardUv);
+        vec2 shardLocal = fract(shardUv) - 0.5;
+        float shardSeed = hash21(shardCell);
+        shardLocal.x += shardLocal.y * (shardSeed - 0.5) * 1.15;
+        float shardDistance = max(abs(shardLocal.x) * (0.86 + shardSeed * 0.28), abs(shardLocal.y) * (0.92 + (1.0 - shardSeed) * 0.22));
+        float shardBody = 1.0 - smoothstep(0.28, 0.55, shardDistance);
+        float sparseRim = smoothstep(0.72, 0.93, shardSeed);
+        float shardRim = smoothstep(0.36, 0.48, shardDistance) * (1.0 - smoothstep(0.48, 0.55, shardDistance)) * sparseRim;
+        float angle = atan(centeredUv.y, centeredUv.x);
+        float radialStreak = pow(0.5 + 0.5 * sin(angle * 29.0 + shardSeed * 6.2831 + uTime * 0.3), 5.0);
+        float fragmentNoise = 0.5 + 0.5 * snoise(vec3(vUv * vec2(6.5 * aspect.x, 7.5), 31.7));
+        float shardPresence = smoothstep(0.24, 0.78, fragmentNoise + shardSeed * 0.3 + radialStreak * 0.18);
+        float iceMask = edgeField * iceEnergy * mix(0.32, 0.88, shardPresence) * (0.82 + shardBody * 0.18);
+        vec2 radialDirection = normalize(centeredUv + vec2(0.0001));
+        vec2 tangentDirection = vec2(-radialDirection.y, radialDirection.x);
+        float refraction = iceMask * (0.014 + shardSeed * 0.036);
+        vec2 refractedUv = clamp(
+          fluidUv - radialDirection * refraction + tangentDirection * (shardSeed - 0.5) * refraction * 0.45,
+          0.0,
+          1.0
+        );
+        float spectralOffset = iceMask * (0.005 + shardSeed * 0.017);
+        vec3 dispersedIce = vec3(
+          texture2D(tYoung, clamp(refractedUv + radialDirection * spectralOffset, 0.0, 1.0)).r,
+          texture2D(tYoung, refractedUv).g,
+          texture2D(tYoung, clamp(refractedUv - radialDirection * spectralOffset, 0.0, 1.0)).b
+        );
+        vec3 coldGlass = mix(vec3(0.23, 0.64, 1.0), vec3(0.88, 0.97, 1.0), shardBody);
+        vec3 spectralRim = mix(vec3(0.1, 0.62, 1.0), vec3(1.0, 0.24, 0.16), step(0.5, shardSeed));
+
+        finalColor = mix(finalColor, dispersedIce * 1.04, iceMask * 0.82);
+        finalColor += coldGlass * shardRim * edgeField * iceEnergy * 0.16;
+        finalColor += spectralRim * radialStreak * edgeField * iceEnergy * 0.1;
+        finalColor += vec3(0.32, 0.62, 0.92) * edgeField * iceEnergy * (0.018 + shardBody * 0.034);
+        iceAlpha = edgeField * iceEnergy * (0.34 + shardBody * 0.24);
+      }
+
+      float finaleProgress = clamp(uFinaleTransition, 0.0, 1.0);
+
+      if (finaleProgress > 0.001) {
+        float finaleAttack = smoothstep(0.015, 0.2, finaleProgress);
+        float finaleRelease = 1.0 - smoothstep(0.72, 0.985, finaleProgress);
+        float finaleEnergy = uReducedMotion ? 0.0 : finaleAttack * finaleRelease;
+        float fogFront = mix(-0.14, 1.2, smoothstep(0.02, 0.88, finaleProgress));
+        float warpedY = vUv.y + n1 * 0.052 + n2 * 0.022;
+        float fogBody = 1.0 - smoothstep(fogFront - 0.13, fogFront + 0.09, warpedY);
+        float fogEdge = 1.0 - smoothstep(0.0, 0.105, abs(warpedY - fogFront));
+        float rowSeed = hash21(vec2(floor(vUv.y * 18.0), 41.0));
+        float opticalStreak = pow(
+          0.5 + 0.5 * sin(vUv.x * (18.0 + rowSeed * 21.0) + rowSeed * 6.2831 + n2 * 1.8),
+          7.0
+        );
+        float refractiveBand = finaleEnergy * clamp(fogEdge * 0.92 + opticalStreak * fogBody * 0.24, 0.0, 1.0);
+        vec2 opticalUv = clamp(
+          fluidUv + vec2((n2 + rowSeed - 0.5) * 0.024, n1 * 0.012) * refractiveBand,
+          0.0,
+          1.0
+        );
+        float finaleSpectralOffset = refractiveBand * (0.004 + rowSeed * 0.006);
+        vec3 finaleSpectrum = vec3(
+          texture2D(tYoung, clamp(opticalUv + vec2(finaleSpectralOffset, 0.0), 0.0, 1.0)).r,
+          texture2D(tYoung, opticalUv).g,
+          texture2D(tYoung, clamp(opticalUv - vec2(finaleSpectralOffset, 0.0), 0.0, 1.0)).b
+        );
+        float spectralMix = finaleEnergy * (fogEdge * 0.82 + fogBody * opticalStreak * 0.22);
+        vec3 fogColor = mix(
+          vec3(0.025, 0.105, 0.17),
+          vec3(0.55, 0.82, 0.92),
+          fogEdge * (0.42 + opticalStreak * 0.28)
+        );
+        vec3 coldFringe = mix(vec3(0.05, 0.64, 1.0), vec3(1.0, 0.16, 0.34), step(0.52, rowSeed));
+
+        finalColor = mix(finalColor, finaleSpectrum, spectralMix);
+        finalColor = mix(finalColor, fogColor, fogBody * finaleEnergy * (0.22 + fogEdge * 0.22));
+        finalColor += coldFringe * fogEdge * finaleEnergy * (0.075 + opticalStreak * 0.085);
+        finalColor = mix(finalColor, vec3(0.004, 0.009, 0.017), smoothstep(0.66, 0.995, finaleProgress));
+      }
+
       float vignette = smoothstep(0.8, 0.2, length(vUv - 0.5));
       float grain = (fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5) - 0.5) * 0.06;
 
-      gl_FragColor = vec4(mix(finalColor * 0.4, finalColor, vignette) + grain, uAlpha);
+      gl_FragColor = vec4(mix(finalColor * 0.4, finalColor, vignette) + grain, max(uAlpha, iceAlpha));
     }
   `,
 };
@@ -233,6 +338,11 @@ export const MeltingTimeWorkExperience: React.FC = () => {
     let targetRadius = 1;
     let currentRadius = 1;
     const getHeroFrameOffsetX = () => (window.innerWidth < 640 ? 0.045 : 0);
+    const getRenderPixelRatio = () => {
+      const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const dprCap = window.innerWidth < 640 ? 1.1 : coarsePointer || window.innerWidth < 1024 ? 1.25 : 1.5;
+      return Math.min(window.devicePixelRatio || 1, dprCap);
+    };
     const setThermalPointer = (clientX: number, clientY: number, intensity = 0.72) => {
       const width = window.innerWidth || 1;
       const height = window.innerHeight || 1;
@@ -531,6 +641,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        renderer.setPixelRatio(getRenderPixelRatio());
         renderer.setSize(window.innerWidth, window.innerHeight);
         heroMaterial.uniforms.uRes.value.set(window.innerWidth, window.innerHeight);
         heroMaterial.uniforms.uFrameOffset.value.set(getHeroFrameOffsetX(), 0);
@@ -582,12 +693,12 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       camera.position.z = 85;
 
       renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: !window.matchMedia('(pointer: coarse)').matches,
         alpha: false,
         canvas: canvasEl,
         powerPreference: 'high-performance',
       });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(getRenderPixelRatio());
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x050505, 1);
       renderer.autoClear = false;
@@ -633,6 +744,8 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           uRadiusMult: { value: 1 },
           uAlpha: { value: 0 },
           uZoom: { value: 0.7 },
+          uIceTransition: { value: 0 },
+          uFinaleTransition: { value: 0 },
           uFrameOffset: { value: new THREE.Vector2(getHeroFrameOffsetX(), 0) },
           uReducedMotion: { value: reducedMotion },
           pBaseRadius: { value: VISUAL_CONFIG.baseRadius },
@@ -648,6 +761,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       heroScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), heroMaterial));
 
       window.addEventListener('resize', handlers.resize);
+      window.visualViewport?.addEventListener('resize', handlers.resize);
       window.addEventListener('mousemove', handlers.mousemove);
       window.addEventListener('mousedown', handlers.mousedown);
       window.addEventListener('mouseup', handlers.mouseup);
@@ -826,7 +940,10 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       const main = mainLight;
       const screenScrubStart = 4.5 / 15;
       const screenScrubEnd = 9 / 15;
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const getHeroFinalZoom = () => (window.innerWidth < 640 ? 1.12 : 1);
+      const getHeroEntryZoom = () => (prefersReducedMotion ? getHeroFinalZoom() : getHeroFinalZoom() + 0.24);
+      const getHeroImpactZoom = () => (prefersReducedMotion ? getHeroFinalZoom() : getHeroFinalZoom() - 0.08);
       const setScreenScrubProgress = (scrollProgress: number) => {
         const normalizedProgress = (scrollProgress - screenScrubStart) / (screenScrubEnd - screenScrubStart);
         scrubEngine.setScrollProgress(normalizedProgress);
@@ -1019,8 +1136,8 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         );
         timeline.to({}, { duration: 4.5, ease: 'none' }, 4.5);
 
-        timeline.to(mac.position, { z: 76, y: -14, duration: 2.5, ease: 'power2.inOut' }, 8.5);
-        timeline.to(mac.rotation, { x: 0, y: 0, duration: 2.5, ease: 'power2.inOut' }, 8.5);
+        timeline.to(mac.position, { z: 76, y: -14, duration: 1.85, ease: 'power4.in' }, 8.65);
+        timeline.to(mac.rotation, { x: 0, y: 0, duration: 1.85, ease: 'power4.in' }, 8.65);
         timeline.to(ambient, { intensity: 0, duration: 1.5, ease: 'power2.out' }, 9);
         timeline.to(main, { intensity: 0, duration: 1.5, ease: 'power2.out' }, 9);
 
@@ -1028,31 +1145,66 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           timeline.to(screenLight, { intensity: 0.2, duration: 1.5 }, 9);
         }
 
-        timeline.fromTo(hero.uniforms.uZoom, { value: 0.7 }, { value: getHeroFinalZoom, duration: 2, ease: 'power2.out' }, 9.5);
-        timeline.to(hero.uniforms.uAlpha, { value: 1, duration: 1.5, ease: 'none' }, 9.5);
+        timeline.fromTo(
+          hero.uniforms.uIceTransition,
+          { value: prefersReducedMotion ? 1 : 0 },
+          { value: 1, duration: prefersReducedMotion ? 0.01 : 1.95, ease: 'none' },
+          9.05,
+        );
+        timeline.fromTo(
+          hero.uniforms.uZoom,
+          { value: getHeroEntryZoom },
+          { value: getHeroImpactZoom, duration: prefersReducedMotion ? 0.01 : 1.35, ease: 'expo.in' },
+          9.1,
+        );
+        timeline.to(
+          hero.uniforms.uZoom,
+          { value: getHeroFinalZoom, duration: prefersReducedMotion ? 0.01 : 0.72, ease: 'expo.out' },
+          10.45,
+        );
+        timeline.to(
+          hero.uniforms.uAlpha,
+          { value: 1, duration: prefersReducedMotion ? 0.35 : 1.18, ease: 'power2.inOut' },
+          9.42,
+        );
         timeline.to({}, { duration: 4 }, 11);
 
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const crystalStage = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-stage]'));
         const crystalScene = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-scene]'));
         const crystalChars = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-char]'));
         const crystalSubtitle = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-subtitle]'));
+        const crystalHandoff = Array.from(root.querySelectorAll<HTMLElement>('[data-melting-crystal-handoff]'));
+        const crystalHandoffEchoes = Array.from(
+          root.querySelectorAll<HTMLElement>('[data-melting-crystal-handoff-echo]'),
+        );
+        const crystalHandoffMists = Array.from(
+          root.querySelectorAll<HTMLElement>('[data-melting-crystal-handoff-mist]'),
+        );
+        const crystalHandoffPrisms = Array.from(
+          root.querySelectorAll<HTMLElement>('[data-melting-crystal-handoff-prism]'),
+        );
+        const crystalHandoffPrismField = Array.from(
+          root.querySelectorAll<HTMLElement>('[data-melting-crystal-handoff-prisms]'),
+        );
+        const finaleSection = root.querySelector<HTMLElement>('.melting-time-crystal-finale');
+        const compactFinaleMotion = window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
 
         gsap.set(crystalChars, {
           opacity: 0,
           y: 40,
           scale: 0.95,
-          filter: 'blur(10px)',
+          filter: compactFinaleMotion ? 'none' : 'blur(10px)',
         });
         gsap.set(crystalSubtitle, {
           opacity: 0,
           y: 20,
-          filter: 'blur(10px)',
+          filter: compactFinaleMotion ? 'none' : 'blur(10px)',
         });
 
-        if (prefersReducedMotion) {
-          gsap.set(crystalStage, { opacity: 1, scale: 1 });
+        if (prefersReducedMotion || !finaleSection) {
+          gsap.set(crystalStage, { autoAlpha: 1, scale: 1 });
           gsap.set(crystalScene, { opacity: 1, scale: 1, filter: 'blur(0px)' });
+          gsap.set(crystalHandoff, { opacity: 0 });
           gsap.set([...crystalChars, ...crystalSubtitle], {
             opacity: 1,
             y: 0,
@@ -1060,67 +1212,170 @@ export const MeltingTimeWorkExperience: React.FC = () => {
             filter: 'blur(0px)',
           });
         } else {
-          gsap.set(crystalStage, { opacity: 0, scale: 1.035 });
-          gsap.set(crystalScene, { opacity: 0, scale: 0.9, filter: 'blur(12px)' });
-          gsap.timeline({
+          gsap.set(crystalStage, { autoAlpha: 0, scale: 1.055 });
+          gsap.set(crystalScene, {
+            opacity: 0,
+            yPercent: compactFinaleMotion ? -14 : -20,
+            scale: compactFinaleMotion ? 0.52 : 0.42,
+            webkitMaskPosition: '0% 100%',
+            maskPosition: '0% 100%',
+            filter: compactFinaleMotion ? 'none' : 'blur(6px) saturate(1.08)',
+          });
+          gsap.set(crystalHandoff, { opacity: 0, yPercent: 30, scale: 0.94 });
+          gsap.set(crystalHandoffEchoes, {
+            opacity: 0,
+            xPercent: (index: number) => [-1.1, 1.1, 0.35][index] ?? 0,
+            yPercent: compactFinaleMotion ? -12 : -18,
+            scale: compactFinaleMotion ? 0.56 : 0.44,
+          });
+          gsap.set(crystalHandoffMists, { opacity: 0, yPercent: 70, scaleX: 0.86 });
+          gsap.set(crystalHandoffPrismField, { opacity: 0 });
+          gsap.set(crystalHandoffPrisms, { opacity: 0, xPercent: -14, scaleX: 0.72 });
+
+          const crystalHandoffTimeline = gsap.timeline({
             scrollTrigger: {
-              trigger: '.melting-time-crystal-finale',
+              trigger: finaleSection,
               start: 'top bottom',
-              end: 'top 24%',
-              scrub: 0.65,
+              end: 'top top',
+              scrub: compactFinaleMotion ? 0.42 : 0.62,
               invalidateOnRefresh: true,
             },
-          }).to(crystalStage, {
-            opacity: 1,
-            scale: 1,
-            duration: 1,
-            ease: 'power2.out',
           });
-
-          const finaleSection = root.querySelector<HTMLElement>('.melting-time-crystal-finale');
-          const crystalEntrance = gsap.timeline({ paused: true });
-          crystalEntrance
+          crystalHandoffTimeline
+            .to(hero.uniforms.uFinaleTransition, { value: 1, duration: 1, ease: 'none' }, 0)
+            .to(crystalStage, { autoAlpha: 1, scale: 1, duration: 0.82, ease: 'power2.inOut' }, 0.08)
             .to(crystalScene, {
               opacity: 1,
+              yPercent: 0,
+              scale: 1.025,
+              webkitMaskPosition: '0% 0%',
+              maskPosition: '0% 0%',
+              filter: 'blur(0px) saturate(1)',
+              duration: 0.7,
+              ease: 'expo.inOut',
+            }, 0.14)
+            .to(crystalScene, {
               scale: 1,
-              filter: 'blur(0px)',
-              duration: 1.35,
+              duration: 0.16,
+              ease: 'power2.out',
+            }, 0.84)
+            .to(crystalHandoff, {
+              opacity: 1,
+              yPercent: -2,
+              scale: 1.05,
+              duration: 0.52,
+              ease: 'power2.out',
+            }, 0.02)
+            .to(crystalHandoffMists, {
+              opacity: (index: number) => (index === 0 ? 0.74 : 0.58),
+              yPercent: -18,
+              scaleX: 1.08,
+              duration: 0.58,
+              stagger: 0.035,
+              ease: 'power2.out',
+            }, 0.06)
+            .to(crystalHandoffEchoes, {
+              opacity: (index: number) => [0.22, 0.16, 0.09][index] ?? 0.1,
+              xPercent: (index: number) => [-0.85, 0.85, 0.25][index] ?? 0,
+              yPercent: -2,
+              scale: 1.08,
+              duration: 0.48,
+              stagger: 0.025,
               ease: 'expo.out',
-            }, 0)
+            }, 0.11)
+            .to(crystalHandoffPrismField, { opacity: 1, duration: 0.12, ease: 'power1.out' }, 0.14)
+            .to(crystalHandoffPrisms, {
+              opacity: 0.38,
+              xPercent: 14,
+              scaleX: 1.08,
+              duration: 0.42,
+              stagger: 0.025,
+              ease: 'power2.out',
+            }, 0.14)
+            .to(crystalHandoffEchoes, {
+              opacity: 0,
+              xPercent: (index: number) => [-1.45, 1.45, 0.5][index] ?? 0,
+              yPercent: -14,
+              scale: 1.14,
+              duration: 0.32,
+              stagger: 0.018,
+              ease: 'power3.in',
+            }, 0.56)
+            .to(crystalHandoffMists, {
+              opacity: 0,
+              yPercent: -65,
+              scaleX: 1.18,
+              duration: 0.38,
+              stagger: 0.025,
+              ease: 'power3.in',
+            }, 0.55)
+            .to(crystalHandoffPrisms, {
+              opacity: 0,
+              xPercent: 38,
+              scaleX: 0.56,
+              duration: 0.27,
+              stagger: 0.018,
+              ease: 'power3.in',
+            }, 0.58)
+            .to(crystalHandoff, {
+              opacity: 0,
+              yPercent: -28,
+              scale: 1.08,
+              duration: 0.22,
+              ease: 'power3.in',
+            }, 0.66);
+
+          const crystalEntrance = gsap.timeline({ paused: true });
+          crystalEntrance
             .call(() => {
               finaleSection?.dispatchEvent(new Event(MELTING_TIME_TITLE_DECODE_EVENT));
-            }, undefined, 0.48)
+            }, undefined, 0)
             .to(crystalChars, {
               opacity: 1,
               y: 0,
               scale: 1,
               filter: 'blur(0px)',
-              duration: 1.35,
-              stagger: 0.1,
+              duration: 1.2,
+              stagger: 0.085,
               ease: 'expo.out',
-            }, 0.48)
+            }, 0)
             .to(crystalSubtitle, {
               opacity: 1,
               y: 0,
               filter: 'blur(0px)',
-              duration: 1.3,
+              duration: 1.16,
               ease: 'expo.out',
-            }, 0.72);
+            }, 0.3);
 
           const playCrystalEntrance = () => {
-            if (crystalEntrance.progress() === 0) crystalEntrance.play();
+            if (crystalEntrance.progress() < 1) crystalEntrance.play();
           };
           const playCrystalEntranceIfReached = () => {
-            if (finaleSection && finaleSection.getBoundingClientRect().top <= window.innerHeight * 0.8) {
+            if (finaleSection.getBoundingClientRect().top <= window.innerHeight * 0.4) {
               playCrystalEntrance();
             }
           };
+          const resetCrystalEntrance = () => {
+            crystalEntrance.pause(0);
+            gsap.set(crystalChars, {
+              opacity: 0,
+              y: 40,
+              scale: 0.95,
+              filter: compactFinaleMotion ? 'none' : 'blur(10px)',
+            });
+            gsap.set(crystalSubtitle, {
+              opacity: 0,
+              y: 20,
+              filter: compactFinaleMotion ? 'none' : 'blur(10px)',
+            });
+          };
           ScrollTrigger.create({
             trigger: finaleSection,
-            start: 'top 80%',
+            start: 'top 40%',
             end: 'bottom top',
             onEnter: playCrystalEntrance,
             onEnterBack: playCrystalEntrance,
+            onLeaveBack: resetCrystalEntrance,
             onUpdate: (self) => {
               if (self.progress > 0) playCrystalEntrance();
             },
@@ -1203,6 +1458,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
       gsapContext?.revert();
       window.removeEventListener('resize', handlers.resize);
+      window.visualViewport?.removeEventListener('resize', handlers.resize);
       window.removeEventListener('mousemove', handlers.mousemove);
       window.removeEventListener('mousedown', handlers.mousedown);
       window.removeEventListener('mouseup', handlers.mouseup);

@@ -670,7 +670,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
               min-height: 100svh;
               overflow: hidden;
               isolation: isolate;
-              background: #010308;
+              background: transparent;
               color: #ffffff;
               cursor: none;
               font-family: 'Noto Serif TC', serif;
@@ -683,6 +683,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
             .melting-time-crystal-scene,
             .melting-time-crystal-canvas,
             .melting-time-crystal-fallback,
+            .melting-time-crystal-handoff,
             .melting-time-crystal-noise,
             .melting-time-crystal-vignette,
             .melting-time-crystal-ui {
@@ -693,18 +694,132 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
             }
 
             .melting-time-crystal-stage {
+              position: fixed;
+              inset: 0;
+              width: 100vw;
+              height: 100svh;
               overflow: hidden;
               background: #010308;
+              opacity: 0;
+              visibility: hidden;
+              pointer-events: none;
               transform: translateZ(0);
-              will-change: opacity, transform;
+              will-change: opacity, transform, visibility;
             }
 
             .melting-time-crystal-scene {
               z-index: 1;
               overflow: hidden;
+              -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 56%, rgba(0, 0, 0, 0.88) 68%, rgba(0, 0, 0, 0.28) 76%, transparent 84%);
+              mask-image: linear-gradient(to bottom, #000 0%, #000 56%, rgba(0, 0, 0, 0.88) 68%, rgba(0, 0, 0, 0.28) 76%, transparent 84%);
+              -webkit-mask-position: 0% 0%;
+              mask-position: 0% 0%;
+              -webkit-mask-repeat: no-repeat;
+              mask-repeat: no-repeat;
+              -webkit-mask-size: 100% 260%;
+              mask-size: 100% 260%;
               transform-origin: 50% 50%;
               will-change: opacity, transform, filter;
             }
+
+            .melting-time-crystal-handoff {
+              z-index: 5;
+              inset: -14%;
+              width: 128%;
+              height: 128%;
+              overflow: hidden;
+              contain: paint;
+              opacity: 0;
+              pointer-events: none;
+              transform-origin: 50% 68%;
+              will-change: opacity, transform;
+            }
+
+            .melting-time-crystal-handoff-echo {
+              position: absolute;
+              inset: -5%;
+              display: block;
+              width: 110%;
+              height: 110%;
+              object-fit: cover;
+              object-position: center;
+              opacity: 0;
+              pointer-events: none;
+              -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.94) 38%, rgba(0, 0, 0, 0.3) 68%, transparent 91%);
+              mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.94) 38%, rgba(0, 0, 0, 0.3) 68%, transparent 91%);
+              mix-blend-mode: screen;
+              transform-origin: 50% 62%;
+              will-change: opacity, transform;
+            }
+
+            .melting-time-crystal-handoff-echo--cyan {
+              filter: grayscale(1) sepia(1) saturate(7) hue-rotate(139deg) brightness(1.08) contrast(1.12) blur(1px);
+            }
+
+            .melting-time-crystal-handoff-echo--magenta {
+              filter: grayscale(1) sepia(1) saturate(6) hue-rotate(272deg) brightness(0.92) contrast(1.18) blur(2px);
+            }
+
+            .melting-time-crystal-handoff-echo--amber {
+              filter: grayscale(1) sepia(1) saturate(5) hue-rotate(338deg) brightness(0.84) contrast(1.22) blur(3px);
+            }
+
+            .melting-time-crystal-handoff-mist {
+              position: absolute;
+              left: -12%;
+              width: 124%;
+              height: 38%;
+              border-radius: 50%;
+              opacity: 0;
+              pointer-events: none;
+              mix-blend-mode: screen;
+              transform-origin: 50% 70%;
+              will-change: opacity, transform;
+            }
+
+            .melting-time-crystal-handoff-mist--deep {
+              top: 47%;
+              background:
+                radial-gradient(ellipse at 32% 48%, rgba(23, 191, 255, 0.34), transparent 34%),
+                radial-gradient(ellipse at 67% 54%, rgba(255, 70, 131, 0.22), transparent 32%),
+                radial-gradient(ellipse at 50% 58%, rgba(210, 237, 255, 0.28), transparent 60%);
+              filter: blur(22px) saturate(1.4);
+            }
+
+            .melting-time-crystal-handoff-mist--crest {
+              top: 35%;
+              height: 27%;
+              background:
+                radial-gradient(ellipse at 24% 61%, rgba(106, 226, 255, 0.42), transparent 28%),
+                radial-gradient(ellipse at 73% 48%, rgba(255, 130, 76, 0.24), transparent 25%),
+                linear-gradient(96deg, transparent 5%, rgba(160, 231, 255, 0.2) 34%, rgba(255, 208, 182, 0.16) 63%, transparent 95%);
+              filter: blur(12px) saturate(1.65);
+            }
+
+            .melting-time-crystal-handoff-prisms {
+              position: absolute;
+              inset: 0;
+              overflow: hidden;
+              opacity: 0;
+              mix-blend-mode: screen;
+              will-change: opacity;
+            }
+
+            .melting-time-crystal-handoff-prism {
+              position: absolute;
+              left: -14%;
+              width: 128%;
+              height: 1px;
+              opacity: 0;
+              background: linear-gradient(90deg, transparent 2%, rgba(64, 213, 255, 0.8) 27%, rgba(238, 248, 255, 0.92) 49%, rgba(255, 80, 140, 0.68) 72%, transparent 98%);
+              box-shadow: 0 0 12px rgba(118, 219, 255, 0.36), 0 0 24px rgba(255, 103, 153, 0.16);
+              transform-origin: 50% 50%;
+              will-change: opacity, transform;
+            }
+
+            .melting-time-crystal-handoff-prism:nth-child(1) { top: 42%; }
+            .melting-time-crystal-handoff-prism:nth-child(2) { top: 50%; }
+            .melting-time-crystal-handoff-prism:nth-child(3) { top: 58%; }
 
             .melting-time-crystal-canvas,
             .melting-time-crystal-fallback {
@@ -849,6 +964,28 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
             }
 
             @media (max-width: 639px) {
+              .melting-time-crystal-handoff {
+                inset: -10%;
+                width: 120%;
+                height: 120%;
+              }
+
+              .melting-time-crystal-handoff-echo--amber {
+                display: none;
+              }
+
+              .melting-time-crystal-handoff-echo--cyan,
+              .melting-time-crystal-handoff-echo--magenta {
+                filter: grayscale(1) sepia(1) saturate(5) hue-rotate(145deg) brightness(1.02) contrast(1.08);
+              }
+
+              .melting-time-crystal-handoff-echo--magenta {
+                filter: grayscale(1) sepia(1) saturate(5) hue-rotate(276deg) brightness(0.9) contrast(1.12);
+              }
+
+              .melting-time-crystal-handoff-mist--deep { filter: blur(14px) saturate(1.22); }
+              .melting-time-crystal-handoff-mist--crest { filter: blur(8px) saturate(1.3); }
+
               .melting-time-crystal-finale--fallback .melting-time-crystal-fallback {
                 transform: scale(0.74);
               }
@@ -883,6 +1020,8 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
             }
 
             @media (prefers-reduced-motion: reduce) {
+              .melting-time-crystal-handoff { display: none; }
+
               .melting-time-crystal-canvas,
               .melting-time-crystal-fallback { transition: none; }
               .melting-time-crystal-char,
@@ -919,6 +1058,50 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
           <canvas ref={canvasRef} className="melting-time-crystal-canvas" aria-hidden="true" />
           <div className="melting-time-crystal-vignette" aria-hidden="true" />
           <div className="melting-time-crystal-noise" aria-hidden="true" />
+        </div>
+
+        <div className="melting-time-crystal-handoff" data-melting-crystal-handoff aria-hidden="true">
+          <img
+            className="melting-time-crystal-handoff-echo melting-time-crystal-handoff-echo--cyan"
+            data-melting-crystal-handoff-echo
+            src={FALLBACK_IMAGE}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            className="melting-time-crystal-handoff-echo melting-time-crystal-handoff-echo--magenta"
+            data-melting-crystal-handoff-echo
+            src={FALLBACK_IMAGE}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            className="melting-time-crystal-handoff-echo melting-time-crystal-handoff-echo--amber"
+            data-melting-crystal-handoff-echo
+            src={FALLBACK_IMAGE}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <div
+            className="melting-time-crystal-handoff-mist melting-time-crystal-handoff-mist--deep"
+            data-melting-crystal-handoff-mist
+          />
+          <div
+            className="melting-time-crystal-handoff-mist melting-time-crystal-handoff-mist--crest"
+            data-melting-crystal-handoff-mist
+          />
+          <div className="melting-time-crystal-handoff-prisms" data-melting-crystal-handoff-prisms>
+            {Array.from({ length: 3 }, (_, index) => (
+              <span
+                key={`crystal-handoff-prism-${index}`}
+                className="melting-time-crystal-handoff-prism"
+                data-melting-crystal-handoff-prism
+              />
+            ))}
+          </div>
         </div>
 
         <div className="melting-time-crystal-ui">
