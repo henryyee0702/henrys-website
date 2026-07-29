@@ -30,23 +30,26 @@ export const ThermodynamicExhibit: React.FC<ThermodynamicExhibitProps> = ({
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
     let isDisposed = false;
-    let reqId: number;
-
-    const observer = new IntersectionObserver(([entry]) => {
-      isVisibleRef.current = entry.isIntersecting;
-    });
-    observer.observe(containerRef.current);
+    let reqId = 0;
+    let observer: IntersectionObserver | undefined;
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
 
-    const renderer = new THREE.WebGLRenderer({ 
-      canvas: canvasRef.current, 
-      alpha: false, 
-      antialias: false, 
-      powerPreference: "high-performance" 
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
+        alpha: false,
+        antialias: false,
+        powerPreference: "high-performance"
+      });
+    } catch {
+      setHasError(true);
+      setIsLoading(false);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
     let tOld: THREE.Texture, tYoung: THREE.Texture, material: THREE.ShaderMaterial, geometry: THREE.PlaneGeometry;
@@ -215,14 +218,16 @@ export const ThermodynamicExhibit: React.FC<ThermodynamicExhibitProps> = ({
           renderer.render(scene, camera);
           return () => {
             ro.disconnect();
+            container.removeEventListener('mousemove', handleMouseMove);
           };
         }
 
         const clock = new THREE.Clock();
+        let isLoopRunning = false;
         const renderLoop = () => {
-          if (isDisposed) return;
+          if (isDisposed || !isLoopRunning) return;
           reqId = requestAnimationFrame(renderLoop);
-          if (!isVisibleRef.current || shouldThrottleFrame(frameCount++, idleTracker.idle)) return;
+          if (shouldThrottleFrame(frameCount++, idleTracker.idle)) return;
 
           currentMouse.lerp(targetMouse, 0.08);
           const dist = currentMouse.distanceTo(lastMouse);
@@ -234,9 +239,38 @@ export const ThermodynamicExhibit: React.FC<ThermodynamicExhibitProps> = ({
           material.uniforms.uVelocity.value = currentVelocity;
           renderer.render(scene, camera);
         };
-        reqId = requestAnimationFrame(renderLoop);
+
+        const stopLoop = () => {
+          isLoopRunning = false;
+          if (reqId) {
+            cancelAnimationFrame(reqId);
+            reqId = 0;
+          }
+        };
+
+        const startLoop = () => {
+          if (isDisposed || isLoopRunning || !isVisibleRef.current || document.hidden) return;
+          isLoopRunning = true;
+          reqId = requestAnimationFrame(renderLoop);
+        };
+
+        observer = new IntersectionObserver(([entry]) => {
+          isVisibleRef.current = entry.isIntersecting;
+          if (isVisibleRef.current) startLoop();
+          else stopLoop();
+        });
+        observer.observe(container);
+
+        const handleVisibilityChange = () => {
+          if (document.hidden) stopLoop();
+          else startLoop();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
+          stopLoop();
+          observer?.disconnect();
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
           ro.disconnect();
           container.removeEventListener('mousemove', handleMouseMove);
         };
@@ -254,13 +288,14 @@ export const ThermodynamicExhibit: React.FC<ThermodynamicExhibitProps> = ({
     const cleanupPromise = init();
     return () => {
       isDisposed = true;
-      observer.disconnect();
+      observer?.disconnect();
       if (reqId) cancelAnimationFrame(reqId);
       if (tOld) tOld.dispose();
       if (tYoung) tYoung.dispose();
       if (geometry) geometry.dispose();
       if (material) material.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       cleanupPromise.then(cleanup => cleanup && cleanup());
     };
   }, [youngImageSrc, oldImageSrc, reducedMotion]);

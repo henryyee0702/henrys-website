@@ -20,30 +20,16 @@ export const ElectromagneticField: React.FC<ElectromagneticFieldProps> = memo(({
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    let animationFrameId: number;
+    let animationFrameId = 0;
+    let isDisposed = false;
     let cols = 0, rows = 0;
     const spacing = 45;
 
     const parentEl = canvas.parentElement;
-    const io = new IntersectionObserver(([entry]) => {
-      isVisibleRef.current = entry.isIntersecting;
-    }, { rootMargin: '200px' });
-    if (parentEl) io.observe(parentEl);
-
-    const resize = () => {
-      if (!parentEl) return;
-      const rect = parentEl.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      cols = Math.floor(canvas.width / spacing) + 1;
-      rows = Math.floor(canvas.height / spacing) + 1;
-    };
-    window.addEventListener('resize', resize);
-    resize();
 
     const render = () => {
-      animationFrameId = requestAnimationFrame(render);
-      if (!isVisibleRef.current) return;
+      animationFrameId = 0;
+      if (isDisposed || !isVisibleRef.current || document.hidden) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const canvasRect = canvas.getBoundingClientRect();
@@ -78,12 +64,55 @@ export const ElectromagneticField: React.FC<ElectromagneticFieldProps> = memo(({
       ctx.stroke();
     };
 
-    render();
+    const cancelScheduledRender = () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = 0;
+      }
+    };
+
+    const scheduleRender = () => {
+      if (isDisposed || animationFrameId || !isVisibleRef.current || document.hidden) return;
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    const resize = () => {
+      if (!parentEl) return;
+      const rect = parentEl.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      cols = Math.floor(canvas.width / spacing) + 1;
+      rows = Math.floor(canvas.height / spacing) + 1;
+      scheduleRender();
+    };
+    const resizeObserver = new ResizeObserver(resize);
+    if (parentEl) resizeObserver.observe(parentEl);
+    resize();
+
+    const unsubscribeMouseX = mouseX.on('change', scheduleRender);
+    const unsubscribeMouseY = mouseY.on('change', scheduleRender);
+
+    const io = new IntersectionObserver(([entry]) => {
+      isVisibleRef.current = entry.isIntersecting;
+      if (isVisibleRef.current) scheduleRender();
+      else cancelScheduledRender();
+    }, { rootMargin: '200px' });
+    if (parentEl) io.observe(parentEl);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) cancelScheduledRender();
+      else scheduleRender();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animationFrameId);
+      isDisposed = true;
+      cancelScheduledRender();
+      unsubscribeMouseX();
+      unsubscribeMouseY();
+      resizeObserver.disconnect();
       io.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [mouseX, mouseY, shouldRender]);
 

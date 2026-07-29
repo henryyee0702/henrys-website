@@ -6,6 +6,7 @@ import {
   MELTING_TIME_TITLE_DECODE_EVENT,
   MeltingTimeCrystalFinale,
 } from '@/components/sections/MeltingTimeCrystalFinale';
+import './MeltingTimeWorkExperience.css';
 
 const ASSETS = {
   macModel: 'https://ksenia-k.com/models/mac-noUv.glb',
@@ -275,7 +276,7 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]) {
   material.dispose();
 }
 
-function disposeScene(scene: THREE.Scene | undefined) {
+function disposeScene(scene: THREE.Object3D | undefined) {
   scene?.traverse((child) => {
     const mesh = child as THREE.Mesh;
 
@@ -306,6 +307,9 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
     let disposed = false;
     let rafId = 0;
+    let pointerFrameId = 0;
+    let isRenderLoopRunning = false;
+    let mainSceneCovered = false;
     let loaderTimeout = 0;
     let gsapContext: { revert: () => void } | undefined;
 
@@ -320,6 +324,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
     let heroMaterial: THREE.ShaderMaterial | undefined;
     let screenMaterial: THREE.MeshBasicMaterial | undefined;
     let keyboardMaterial: THREE.MeshBasicMaterial | undefined;
+    let keyboardTexture: THREE.Texture | undefined;
     let baseMetalMaterial: THREE.MeshStandardMaterial | undefined;
     let darkPlasticMaterial: THREE.MeshStandardMaterial | undefined;
     let cameraMaterial: THREE.MeshBasicMaterial | undefined;
@@ -343,6 +348,13 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       const dprCap = window.innerWidth < 640 ? 1.1 : coarsePointer || window.innerWidth < 1024 ? 1.25 : 1.5;
       return Math.min(window.devicePixelRatio || 1, dprCap);
     };
+    const setTargetMouse = (clientX: number, clientY: number) => {
+      const width = window.innerWidth || 1;
+      const height = window.innerHeight || 1;
+      const normalizedX = Math.max(0, Math.min(1, clientX / width));
+      const normalizedY = Math.max(0, Math.min(1, clientY / height));
+      targetMouse.set(normalizedX, 1 - normalizedY);
+    };
     const setThermalPointer = (clientX: number, clientY: number, intensity = 0.72) => {
       const width = window.innerWidth || 1;
       const height = window.innerHeight || 1;
@@ -351,7 +363,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       const centeredX = (normalizedX - 0.5) * 2;
       const centeredY = (normalizedY - 0.5) * 2;
 
-      targetMouse.set(normalizedX, 1 - normalizedY);
+      setTargetMouse(clientX, clientY);
       root.style.setProperty('--melting-pointer-x', `${clientX}px`);
       root.style.setProperty('--melting-pointer-y', `${clientY}px`);
       root.style.setProperty('--melting-sheet-shift-x', `${centeredX * 26}px`);
@@ -367,6 +379,29 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       root.style.setProperty('--melting-pointer-heat', `${heat}`);
       root.style.setProperty('--melting-title-glass-opacity', `${0.42 + heat * 0.18}`);
     };
+    let pendingThermalPointer: { clientX: number; clientY: number; intensity: number } | undefined;
+    const flushThermalPointer = () => {
+      pointerFrameId = 0;
+      const pendingPointer = pendingThermalPointer;
+      pendingThermalPointer = undefined;
+
+      if (pendingPointer) {
+        setThermalPointer(pendingPointer.clientX, pendingPointer.clientY, pendingPointer.intensity);
+      }
+    };
+    const scheduleThermalPointer = (clientX: number, clientY: number, intensity: number) => {
+      // Keep shader input synchronous; only coalesce the style writes.
+      setTargetMouse(clientX, clientY);
+      pendingThermalPointer = { clientX, clientY, intensity };
+      if (!pointerFrameId) {
+        pointerFrameId = window.requestAnimationFrame(flushThermalPointer);
+      }
+    };
+    const flushPendingThermalPointer = () => {
+      if (!pendingThermalPointer) return;
+      window.cancelAnimationFrame(pointerFrameId);
+      flushThermalPointer();
+    };
 
     setThermalPointer(window.innerWidth * 0.5, window.innerHeight * 0.48, 0.62);
 
@@ -377,6 +412,9 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       context: undefined as CanvasRenderingContext2D | null | undefined,
       texture: undefined as THREE.CanvasTexture | undefined,
       posterImage: undefined as HTMLImageElement | undefined,
+      unlockPlayback: undefined as (() => void) | undefined,
+      videoFrameCallbackId: undefined as number | undefined,
+      fallbackPaintFrameId: 0,
       lastProgress: -1,
       metadataReady: false,
       isReady: false,
@@ -431,19 +469,23 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           this.video?.appendChild(source);
         });
 
-        const unlock = () => {
+        this.unlockPlayback = () => {
           if (!this.isReady && this.video) {
             const playPromise = this.video.play();
             playPromise?.then(() => this.video?.pause()).catch(() => undefined);
           }
 
           ['touchstart', 'pointerdown', 'wheel'].forEach((eventName) => {
-            window.removeEventListener(eventName, unlock);
+            if (this.unlockPlayback) {
+              window.removeEventListener(eventName, this.unlockPlayback);
+            }
           });
         };
 
         ['touchstart', 'pointerdown', 'wheel'].forEach((eventName) => {
-          window.addEventListener(eventName, unlock, { once: true, passive: true });
+          if (this.unlockPlayback) {
+            window.addEventListener(eventName, this.unlockPlayback, { once: true, passive: true });
+          }
         });
 
         this.video.addEventListener('loadedmetadata', () => {
@@ -497,6 +539,10 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           const image = new Image();
           image.crossOrigin = 'anonymous';
           image.onload = () => {
+            if (disposed) {
+              resolve();
+              return;
+            }
             this.posterImage = image;
             this.drawPoster();
             resolve();
@@ -533,11 +579,17 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         };
 
         if ('requestVideoFrameCallback' in this.video) {
-          this.video.requestVideoFrameCallback(() => paint());
+          this.videoFrameCallbackId = this.video.requestVideoFrameCallback(() => {
+            this.videoFrameCallbackId = undefined;
+            paint();
+          });
           return;
         }
 
-        requestAnimationFrame(paint);
+        this.fallbackPaintFrameId = requestAnimationFrame(() => {
+          this.fallbackPaintFrameId = 0;
+          paint();
+        });
       },
 
       redrawCurrentFrame() {
@@ -621,6 +673,19 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       },
 
       dispose() {
+        if (this.unlockPlayback) {
+          ['touchstart', 'pointerdown', 'wheel'].forEach((eventName) => {
+            window.removeEventListener(eventName, this.unlockPlayback!);
+          });
+          this.unlockPlayback = undefined;
+        }
+
+        if (this.video && this.videoFrameCallbackId !== undefined && 'cancelVideoFrameCallback' in this.video) {
+          this.video.cancelVideoFrameCallback(this.videoFrameCallbackId);
+          this.videoFrameCallbackId = undefined;
+        }
+        cancelAnimationFrame(this.fallbackPaintFrameId);
+        this.fallbackPaintFrameId = 0;
         this.texture?.dispose();
 
         if (this.video) {
@@ -630,6 +695,12 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           this.video.removeAttribute('src');
           this.video.load();
         }
+
+        this.video = undefined;
+        this.canvas = undefined;
+        this.context = undefined;
+        this.texture = undefined;
+        this.posterImage = undefined;
       },
     };
 
@@ -639,6 +710,9 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           return;
         }
 
+        window.cancelAnimationFrame(pointerFrameId);
+        pointerFrameId = 0;
+        pendingThermalPointer = undefined;
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setPixelRatio(getRenderPixelRatio());
@@ -649,14 +723,16 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         scrubEngine.redrawCurrentFrame();
       },
       mousemove: (event: MouseEvent) => {
-        setThermalPointer(event.clientX, event.clientY, 0.82);
+        scheduleThermalPointer(event.clientX, event.clientY, 0.82);
       },
       mousedown: () => {
+        flushPendingThermalPointer();
         targetRadius = 2;
         root.style.setProperty('--melting-pointer-heat', '1');
         root.style.setProperty('--melting-title-glass-opacity', '0.6');
       },
       mouseup: () => {
+        flushPendingThermalPointer();
         targetRadius = 1;
         root.style.setProperty('--melting-pointer-heat', '0.72');
         root.style.setProperty('--melting-title-glass-opacity', '0.55');
@@ -672,10 +748,11 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         const touch = event.touches[0];
 
         if (touch) {
-          setThermalPointer(touch.clientX, touch.clientY, 0.92);
+          scheduleThermalPointer(touch.clientX, touch.clientY, 0.92);
         }
       },
       touchend: () => {
+        flushPendingThermalPointer();
         targetRadius = 1;
         root.style.setProperty('--melting-pointer-heat', '0.66');
         root.style.setProperty('--melting-title-glass-opacity', '0.54');
@@ -779,7 +856,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       });
 
       const textureLoader = new THREE.TextureLoader();
-      const keyboardTexture = textureLoader.load(ASSETS.keyboardTexture, undefined, undefined, () => undefined);
+      keyboardTexture = textureLoader.load(ASSETS.keyboardTexture, undefined, undefined, () => undefined);
       keyboardMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         alphaMap: keyboardTexture,
@@ -821,6 +898,12 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         modelLoader.load(
           ASSETS.macModel,
           (glb) => {
+            if (disposed) {
+              disposeScene(glb.scene);
+              resolve();
+              return;
+            }
+
             [...glb.scene.children].forEach((child) => {
               if (child.name === '_top') {
                 lid.add(child);
@@ -888,7 +971,16 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       });
 
     const renderLoop = () => {
-      if (!renderer || !scene || !camera || !heroScene || !heroCamera || !heroMaterial) {
+      if (
+        disposed ||
+        !isRenderLoopRunning ||
+        !renderer ||
+        !scene ||
+        !camera ||
+        !heroScene ||
+        !heroCamera ||
+        !heroMaterial
+      ) {
         return;
       }
 
@@ -922,6 +1014,32 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       }
 
       rafId = requestAnimationFrame(renderLoop);
+    };
+
+    const stopRenderLoop = () => {
+      isRenderLoopRunning = false;
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+    };
+
+    const startRenderLoop = () => {
+      if (disposed || isRenderLoopRunning || mainSceneCovered || document.hidden) return;
+      isRenderLoopRunning = true;
+      rafId = requestAnimationFrame(renderLoop);
+    };
+
+    const setMainSceneCovered = (covered: boolean) => {
+      if (mainSceneCovered === covered) return;
+      mainSceneCovered = covered;
+      if (mainSceneCovered) stopRenderLoop();
+      else startRenderLoop();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) stopRenderLoop();
+      else startRenderLoop();
     };
 
     const createScrollAnimation = (
@@ -1239,6 +1357,12 @@ export const MeltingTimeWorkExperience: React.FC = () => {
               end: 'top top',
               scrub: compactFinaleMotion ? 0.42 : 0.62,
               invalidateOnRefresh: true,
+              onUpdate: (self) => {
+                if (self.progress < 0.999) setMainSceneCovered(false);
+              },
+              onScrubComplete: (self) => {
+                if (self.progress >= 0.999) setMainSceneCovered(true);
+              },
             },
           });
           crystalHandoffTimeline
@@ -1435,7 +1559,8 @@ export const MeltingTimeWorkExperience: React.FC = () => {
           }
 
           createScrollAnimation(gsapModule.gsap, scrollTriggerModule.ScrollTrigger);
-          renderLoop();
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          startRenderLoop();
         }, 900);
       } catch (error) {
         console.error('[MeltingTimeWorkExperience] bootstrap failed', error);
@@ -1451,10 +1576,10 @@ export const MeltingTimeWorkExperience: React.FC = () => {
     return () => {
       disposed = true;
       window.clearTimeout(loaderTimeout);
-
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
+      window.cancelAnimationFrame(pointerFrameId);
+      pendingThermalPointer = undefined;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopRenderLoop();
 
       gsapContext?.revert();
       window.removeEventListener('resize', handlers.resize);
@@ -1468,10 +1593,18 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
       disposeScene(scene);
       disposeScene(heroScene);
+      screenMaterial?.dispose();
+      keyboardMaterial?.dispose();
+      keyboardTexture?.dispose();
+      baseMetalMaterial?.dispose();
+      darkPlasticMaterial?.dispose();
+      cameraMaterial?.dispose();
+      logoMaterial?.dispose();
       textureOld?.dispose();
       textureYoung?.dispose();
       scrubEngine.dispose();
       renderer?.dispose();
+      renderer?.forceContextLoss();
     };
   }, []);
 
@@ -1481,817 +1614,6 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       className="melting-time-experience relative isolate w-full overflow-x-clip bg-[#050505] text-[#F5F5F7]"
       aria-label="鹽埕的冰作品頁"
     >
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-          .melting-time-loader {
-            background:
-              radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.1), transparent 32%),
-              linear-gradient(180deg, #090909 0%, #030303 100%);
-          }
-
-          .melting-time-loader__backdrop {
-            position: absolute;
-            inset: 0;
-            background-image:
-              linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-            background-size: 7rem 7rem;
-            mask-image: radial-gradient(circle at center, black 25%, transparent 76%);
-            opacity: 0.55;
-          }
-
-          .melting-time-loader__core {
-            --loader-size: clamp(6.4rem, 12vw, 9.6rem);
-            --rect-width: calc(var(--loader-size) * 0.22);
-            --rect-height: calc(var(--loader-size) * 0.28);
-            --top-center-x: calc((var(--loader-size) - var(--rect-width)) / 2);
-            --top-center-y: calc(var(--loader-size) * 0.07);
-            --bottom-left-x: calc(var(--loader-size) * 0.185);
-            --bottom-left-y: calc(var(--loader-size) * 0.515);
-            --bottom-right-x: calc(var(--loader-size) - var(--rect-width) - (var(--loader-size) * 0.185));
-            --bottom-right-y: calc(var(--loader-size) * 0.515);
-            position: relative;
-            width: var(--loader-size);
-            height: var(--loader-size);
-            animation: melting-time-loader-breathe 2000ms ease-in-out infinite;
-          }
-
-          .melting-time-loader__core::before {
-            content: '';
-            position: absolute;
-            inset: -62%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 68%);
-          }
-
-          .melting-time-loader__square {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: var(--rect-width);
-            height: var(--rect-height);
-            border: clamp(3px, 0.25vw, 4px) solid rgba(255, 255, 255, 0.92);
-            background: rgba(255, 255, 255, 0.02);
-            box-shadow:
-              0 0 14px rgba(255, 255, 255, 0.12),
-              0 0 28px rgba(255, 255, 255, 0.05);
-            animation:
-              melting-time-loader-square-path 4000ms cubic-bezier(1, 0, 0, 1) infinite,
-              melting-time-loader-square-blink 1000ms ease-in-out infinite;
-          }
-
-          .melting-time-loader__square:nth-of-type(1) {
-            border-color: rgba(255, 255, 255, 0.98);
-          }
-
-          .melting-time-loader__square:nth-of-type(2) {
-            border-color: rgba(255, 255, 255, 0.88);
-            box-shadow:
-              0 0 12px rgba(255, 255, 255, 0.1),
-              0 0 24px rgba(255, 255, 255, 0.045);
-            animation-delay: -1333ms, -75ms;
-          }
-
-          .melting-time-loader__square:nth-of-type(3) {
-            border-color: rgba(255, 255, 255, 0.78);
-            box-shadow:
-              0 0 10px rgba(255, 255, 255, 0.08),
-              0 0 18px rgba(255, 255, 255, 0.035);
-            animation-delay: -2666ms, -150ms;
-          }
-
-          @keyframes melting-time-loader-square-path {
-            0%,
-            100% {
-              transform: translate3d(var(--top-center-x), var(--top-center-y), 0);
-            }
-
-            33.333% {
-              transform: translate3d(var(--bottom-right-x), var(--bottom-right-y), 0);
-            }
-
-            66.666% {
-              transform: translate3d(var(--bottom-left-x), var(--bottom-left-y), 0);
-            }
-          }
-
-          @keyframes melting-time-loader-square-blink {
-            0%,
-            100% {
-              filter: brightness(1);
-              opacity: 0.95;
-            }
-
-            50% {
-              filter: brightness(0.72);
-              opacity: 0.82;
-            }
-          }
-
-          @keyframes melting-time-loader-breathe {
-            0%,
-            100% {
-              transform: scale(1);
-            }
-
-            50% {
-              transform: scale(0.7);
-            }
-          }
-
-          .melting-time-experience ::selection {
-            background: #FFD60A;
-            color: #050505;
-          }
-
-          .melting-time-experience {
-            --melting-pointer-x: 50vw;
-            --melting-pointer-y: 48vh;
-            --melting-pointer-heat: 0.62;
-            --melting-sheet-shift-x: 0px;
-            --melting-sheet-shift-y: 0px;
-            --melting-title-shift-x: 0px;
-            --melting-title-shift-y: 0px;
-            --melting-title-glass-shift-x: 0px;
-            --melting-title-glass-shift-y: 0px;
-            --melting-title-ca-shift-x: 0px;
-            --melting-title-ca-shift-y: 0px;
-            --melting-title-glass-opacity: 0.54;
-          }
-
-          .melting-time-hero-title {
-            position: relative;
-            display: inline-block;
-            color: #eff6ff;
-            will-change: clip-path, transform, opacity;
-          }
-
-          .melting-time-hero-title::before {
-            content: '';
-            position: absolute;
-            inset: -0.24em -0.22em -0.14em;
-            z-index: 0;
-            border-radius: 48% 52% 44% 56% / 58% 44% 56% 42%;
-            background:
-              radial-gradient(
-                circle at calc(50% + var(--melting-title-shift-x, 0px)) calc(44% + var(--melting-title-shift-y, 0px)),
-                rgba(255, 224, 159, 0.28),
-                rgba(255, 116, 72, 0.12) 34%,
-                transparent 66%
-              ),
-              radial-gradient(
-                ellipse at calc(46% - var(--melting-title-shift-x, 0px)) 58%,
-                rgba(108, 223, 255, 0.18),
-                transparent 54%
-              ),
-              linear-gradient(96deg, rgba(255, 255, 255, 0.035), rgba(255, 206, 127, 0.1), rgba(84, 199, 255, 0.045));
-            filter: blur(5px) saturate(1.22);
-            mix-blend-mode: screen;
-            opacity: var(--melting-title-glass-opacity, 0.54);
-            transform: translate3d(
-              var(--melting-title-glass-shift-x, 0px),
-              var(--melting-title-glass-shift-y, 0px),
-              0
-            );
-            will-change: transform, opacity, background;
-          }
-
-          .melting-time-title-base,
-          .melting-time-title-liquid-layer {
-            display: block;
-          }
-
-          .melting-time-title-base {
-            position: relative;
-            z-index: 1;
-            color: #eef7ff;
-            text-shadow:
-              0 0.045em 0 rgba(99, 118, 132, 0.82),
-              0 0.09em 0 rgba(26, 38, 48, 0.8),
-              0 18px 60px rgba(0, 0, 0, 0.55),
-              0 0 34px rgba(255, 214, 138, 0.18);
-          }
-
-          .melting-time-title-liquid-layer {
-            position: absolute;
-            inset: 0;
-            z-index: 2;
-            color: rgba(255, 237, 192, 0.42);
-            filter:
-              drop-shadow(0 0 18px rgba(255, 189, 95, 0.28))
-              drop-shadow(0 0 28px rgba(94, 212, 255, 0.13));
-            mix-blend-mode: screen;
-            opacity: 0;
-            transform: translateZ(0);
-            animation: melting-time-title-liquid-flow 7200ms ease-in-out infinite alternate;
-            pointer-events: none;
-            will-change: transform, opacity, color;
-          }
-
-          .melting-time-title-liquid-layer::before,
-          .melting-time-title-liquid-layer::after {
-            content: attr(data-title);
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-          }
-
-          .melting-time-title-liquid-layer::before {
-            color: rgba(109, 227, 255, 0.34);
-            transform: translate3d(calc(-0.018em - var(--melting-title-ca-shift-x, 0px)), calc(0.012em + var(--melting-title-ca-shift-y, 0px)), 0);
-            opacity: 0.52;
-          }
-
-          .melting-time-title-liquid-layer::after {
-            color: rgba(255, 95, 72, 0.3);
-            transform: translate3d(calc(0.018em + var(--melting-title-ca-shift-x, 0px)), calc(-0.01em - var(--melting-title-ca-shift-y, 0px)), 0);
-            opacity: 0.46;
-          }
-
-          @keyframes melting-time-title-liquid-flow {
-            0% {
-              color: rgba(255, 237, 192, 0.34);
-              transform: translate3d(calc(-0.012em + var(--melting-title-shift-x, 0px)), calc(0.006em + var(--melting-title-shift-y, 0px)), 0) skewX(-1.2deg);
-              filter:
-                drop-shadow(0 0 16px rgba(255, 189, 95, 0.24))
-                drop-shadow(0 0 24px rgba(94, 212, 255, 0.1));
-            }
-
-            100% {
-              color: rgba(162, 232, 255, 0.42);
-              transform: translate3d(calc(0.012em + var(--melting-title-shift-x, 0px)), calc(-0.006em + var(--melting-title-shift-y, 0px)), 0) skewX(1.1deg);
-              filter:
-                drop-shadow(0 0 24px rgba(255, 189, 95, 0.32))
-                drop-shadow(0 0 34px rgba(94, 212, 255, 0.16));
-            }
-          }
-
-          .melting-time-scroll-text {
-            background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-            text-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-          }
-
-          .melting-time-content-section {
-            isolation: isolate;
-            background: #041622;
-          }
-
-          .melting-time-content-backdrop {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            overflow: hidden;
-            background:
-              radial-gradient(circle at 50% 34%, rgba(255, 174, 82, 0.16), transparent 34%),
-              radial-gradient(circle at 50% 72%, rgba(101, 181, 255, 0.1), transparent 34%),
-              linear-gradient(180deg, rgba(2, 8, 14, 0.98) 0%, rgba(5, 23, 36, 0.99) 48%, rgba(2, 10, 16, 1) 100%);
-            transform: translateZ(0);
-            will-change: opacity;
-          }
-
-          .melting-time-content-backdrop::before,
-          .melting-time-content-backdrop::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            transform: translateZ(0);
-            will-change: transform, opacity, background;
-          }
-
-          .melting-time-content-backdrop::before {
-            background:
-              radial-gradient(
-                circle at var(--melting-pointer-x, 50vw) var(--melting-pointer-y, 48vh),
-                rgba(255, 228, 168, 0.28) 0 6%,
-                rgba(255, 116, 72, 0.13) 18%,
-                rgba(92, 213, 255, 0.09) 34%,
-                transparent 56%
-              ),
-              radial-gradient(ellipse at 50% 52%, rgba(255, 198, 118, 0.1), transparent 42%);
-            filter: blur(10px) saturate(1.3);
-            mix-blend-mode: screen;
-            opacity: var(--melting-pointer-heat, 0.62);
-          }
-
-          .melting-time-content-backdrop::after {
-            background:
-              radial-gradient(
-                ellipse at var(--melting-pointer-x, 50vw) var(--melting-pointer-y, 48vh),
-                rgba(255, 255, 255, 0.08),
-                transparent 24rem
-              ),
-              repeating-linear-gradient(98deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 36px);
-            mix-blend-mode: screen;
-            opacity: 0.34;
-            transform: translate3d(var(--melting-sheet-shift-x, 0px), var(--melting-sheet-shift-y, 0px), 0);
-          }
-
-          .melting-time-transition-field {
-            position: fixed;
-            inset: 0;
-            z-index: 1;
-            overflow: hidden;
-            pointer-events: none;
-            contain: layout paint style;
-          }
-
-          .melting-time-transition-veil {
-            position: absolute;
-            inset: -10vh -8vw;
-            background:
-              radial-gradient(ellipse at 50% 34%, rgba(255, 154, 78, 0.14), transparent 30%),
-              radial-gradient(ellipse at 48% 42%, rgba(126, 206, 255, 0.1), transparent 40%),
-              linear-gradient(180deg, rgba(2, 9, 15, 0.08) 0%, rgba(7, 29, 45, 0.9) 48%, rgba(3, 13, 21, 1) 100%);
-            transform: translateZ(0);
-            will-change: clip-path, opacity;
-          }
-
-          .melting-time-memory-grain {
-            position: absolute;
-            inset: 0;
-            background:
-              radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.06) 0 1px, transparent 2px),
-              radial-gradient(circle at 72% 58%, rgba(255, 255, 255, 0.045) 0 1px, transparent 2px),
-              radial-gradient(circle at 46% 74%, rgba(255, 214, 155, 0.045) 0 1px, transparent 2px),
-              repeating-linear-gradient(96deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 24px);
-            mix-blend-mode: screen;
-            transform: translateZ(0);
-            will-change: opacity;
-          }
-
-          .melting-time-melt-field {
-            position: absolute;
-            inset: -8vh -6vw;
-            transform: translateZ(0);
-            will-change: transform, opacity;
-          }
-
-          .melting-time-melt-field::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-              radial-gradient(ellipse at 50% 36%, rgba(255, 214, 10, 0.2), transparent 28%),
-              radial-gradient(ellipse at 50% 47%, rgba(255, 116, 68, 0.12), transparent 38%),
-              linear-gradient(100deg, transparent 0 31%, rgba(255, 236, 180, 0.09) 38%, transparent 48% 100%),
-              linear-gradient(78deg, transparent 0 40%, rgba(155, 216, 255, 0.08) 45%, transparent 56% 100%);
-            mix-blend-mode: screen;
-            opacity: 0.78;
-          }
-
-          .melting-time-memory-slit {
-            position: absolute;
-            left: 50%;
-            top: 36%;
-            width: min(108vw, 88rem);
-            height: clamp(8rem, 18vh, 13rem);
-            clip-path: polygon(
-              0% 47%,
-              6% 42%,
-              14% 45%,
-              24% 38%,
-              35% 43%,
-              47% 37%,
-              59% 44%,
-              70% 39%,
-              82% 45%,
-              93% 41%,
-              100% 46%,
-              100% 58%,
-              92% 62%,
-              81% 58%,
-              69% 64%,
-              57% 59%,
-              45% 66%,
-              33% 60%,
-              21% 65%,
-              10% 60%,
-              0% 64%
-            );
-            overflow: hidden;
-            transform: translate3d(-50%, -50%, 0);
-            transform-origin: 50% 50%;
-            background:
-              radial-gradient(ellipse at 50% 48%, rgba(255, 215, 128, 0.28), rgba(255, 112, 64, 0.08) 34%, transparent 66%),
-              linear-gradient(90deg, transparent, rgba(255, 238, 184, 0.2) 18%, rgba(255, 255, 255, 0.06) 50%, rgba(165, 222, 255, 0.15) 82%, transparent);
-            filter: drop-shadow(0 0 24px rgba(255, 178, 80, 0.22));
-            will-change: transform, opacity;
-          }
-
-          .melting-time-memory-slit::before,
-          .melting-time-memory-slit::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 34%;
-            pointer-events: none;
-            background:
-              linear-gradient(90deg, transparent, rgba(255, 237, 180, 0.58), rgba(255, 139, 76, 0.2), rgba(197, 235, 255, 0.34), transparent);
-            box-shadow:
-              0 0 18px rgba(255, 199, 117, 0.32),
-              0 0 70px rgba(255, 112, 64, 0.15);
-          }
-
-          .melting-time-memory-slit::before {
-            top: 0;
-            clip-path: polygon(0 78%, 8% 68%, 16% 76%, 25% 64%, 36% 73%, 48% 61%, 60% 74%, 72% 66%, 84% 75%, 94% 67%, 100% 76%, 100% 100%, 0 100%);
-          }
-
-          .melting-time-memory-slit::after {
-            bottom: 0;
-            clip-path: polygon(0 0, 100% 0, 100% 24%, 91% 33%, 82% 24%, 72% 36%, 61% 25%, 50% 38%, 39% 25%, 29% 35%, 18% 25%, 8% 34%, 0 25%);
-          }
-
-          .melting-time-memory-film {
-            position: absolute;
-            inset: 10% 0;
-            background:
-              radial-gradient(ellipse at 50% 46%, rgba(255, 226, 168, 0.64) 0 8%, rgba(255, 184, 83, 0.2) 27%, transparent 64%),
-              radial-gradient(ellipse at 42% 54%, rgba(210, 235, 255, 0.24), transparent 44%),
-              linear-gradient(93deg, transparent 0 32%, rgba(255, 255, 255, 0.08) 43%, transparent 54%),
-              linear-gradient(86deg, transparent 0 46%, rgba(255, 121, 76, 0.09) 51%, transparent 62%),
-              linear-gradient(180deg, rgba(218, 238, 255, 0.08), rgba(4, 18, 29, 0.02));
-            mix-blend-mode: screen;
-            transform: translateZ(0);
-            will-change: transform, opacity;
-          }
-
-          .melting-time-transition-line {
-            position: absolute;
-            left: 50%;
-            top: 38%;
-            width: min(82vw, 68rem);
-            height: 2px;
-            border-radius: 999px;
-            background: linear-gradient(90deg, transparent, rgba(255, 226, 168, 0.84), rgba(255, 112, 64, 0.46), rgba(178, 229, 255, 0.6), transparent);
-            box-shadow:
-              0 0 22px rgba(255, 185, 92, 0.32),
-              0 0 72px rgba(255, 112, 64, 0.16);
-            transform: translate3d(-50%, -50%, 0);
-            transform-origin: 50% 50%;
-            will-change: transform, opacity;
-          }
-
-          .melting-time-transition-sheen {
-            position: absolute;
-            inset: -12vh -35vw;
-            background: linear-gradient(106deg, transparent 36%, rgba(255, 226, 168, 0.14) 47%, rgba(255, 112, 64, 0.12) 51%, transparent 63%);
-            mix-blend-mode: screen;
-            transform: translateZ(0);
-            will-change: transform, opacity;
-          }
-
-          .melting-time-memory-drips {
-            position: absolute;
-            inset: 0;
-          }
-
-          .melting-time-memory-drip {
-            position: absolute;
-            top: calc(35% + clamp(2.2rem, 6vh, 4.8rem));
-            width: 2px;
-            height: clamp(3.6rem, 12vh, 8rem);
-            border-radius: 999px;
-            background: linear-gradient(180deg, rgba(255, 232, 184, 0.74), rgba(255, 132, 76, 0.18) 68%, transparent);
-            box-shadow: 0 0 18px rgba(255, 173, 92, 0.24);
-            transform: translate3d(0, 0, 0) scaleY(0.04);
-            transform-origin: 50% 0%;
-            will-change: transform, opacity;
-          }
-
-          .melting-time-memory-drip::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            bottom: -4px;
-            width: 6px;
-            height: 6px;
-            border-radius: 999px;
-            background: rgba(255, 224, 172, 0.56);
-            transform: translateX(-50%);
-          }
-
-          .melting-time-memory-drip:nth-child(1) {
-            left: 12%;
-            height: clamp(4.2rem, 13vh, 8.5rem);
-          }
-
-          .melting-time-memory-drip:nth-child(2) {
-            left: 20%;
-            height: clamp(5rem, 17vh, 11rem);
-          }
-
-          .melting-time-memory-drip:nth-child(3) {
-            left: 28%;
-            height: clamp(4rem, 14vh, 9rem);
-          }
-
-          .melting-time-memory-drip:nth-child(4) {
-            left: 38%;
-            height: clamp(5.5rem, 19vh, 12rem);
-          }
-
-          .melting-time-memory-drip:nth-child(5) {
-            left: 47%;
-            height: clamp(3.8rem, 12vh, 8rem);
-          }
-
-          .melting-time-memory-drip:nth-child(6) {
-            left: 56%;
-            height: clamp(5.2rem, 18vh, 11rem);
-          }
-
-          .melting-time-memory-drip:nth-child(7) {
-            left: 64%;
-            height: clamp(4.5rem, 15vh, 9.5rem);
-          }
-
-          .melting-time-memory-drip:nth-child(8) {
-            left: 73%;
-            height: clamp(6rem, 20vh, 13rem);
-          }
-
-          .melting-time-memory-drip:nth-child(9) {
-            left: 81%;
-            height: clamp(4.4rem, 14vh, 9rem);
-          }
-
-          .melting-time-memory-drip:nth-child(10) {
-            left: 88%;
-            height: clamp(5.2rem, 18vh, 11rem);
-          }
-
-          .melting-time-memory-drip:nth-child(11) {
-            left: 94%;
-            height: clamp(4rem, 15vh, 9rem);
-          }
-
-          .melting-time-transition-slices {
-            position: absolute;
-            inset: 0;
-          }
-
-          .melting-time-final-liquid {
-            position: fixed;
-            inset: 0;
-            z-index: 2;
-            overflow: hidden;
-            pointer-events: none;
-            contain: layout paint style;
-            transform: translateZ(0);
-            will-change: transform, opacity;
-          }
-
-          .melting-time-final-liquid::before {
-            content: '';
-            position: absolute;
-            left: var(--melting-pointer-x, 50vw);
-            top: var(--melting-pointer-y, 49vh);
-            width: min(118vw, 76rem);
-            aspect-ratio: 1.75;
-            border-radius: 999px;
-            background:
-              radial-gradient(ellipse at 50% 46%, rgba(255, 223, 154, 0.24), transparent 34%),
-              radial-gradient(ellipse at 52% 54%, rgba(255, 103, 67, 0.13), transparent 48%),
-              radial-gradient(ellipse at 42% 58%, rgba(105, 212, 255, 0.12), transparent 46%);
-            filter: blur(18px);
-            opacity: 0.92;
-            transform: translate3d(-50%, -50%, 0);
-            animation: melting-time-final-liquid-breathe 7800ms ease-in-out infinite alternate;
-          }
-
-          .melting-time-final-liquid::after {
-            content: '';
-            position: absolute;
-            left: calc(50% + var(--melting-title-glass-shift-x, 0px));
-            top: calc(50% + var(--melting-title-glass-shift-y, 0px));
-            width: min(92vw, 58rem);
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(139, 224, 255, 0.38), rgba(255, 224, 164, 0.72), rgba(255, 103, 67, 0.28), transparent);
-            box-shadow:
-              0 0 30px rgba(255, 190, 108, 0.22),
-              0 0 90px rgba(88, 207, 255, 0.12);
-            opacity: 0.78;
-            transform: translate3d(-50%, -50%, 0) scaleX(0.88);
-            animation: melting-time-final-liquid-line 6200ms ease-in-out infinite alternate;
-          }
-
-          .melting-time-final-liquid-sheet {
-            position: absolute;
-            left: calc(50% + var(--melting-sheet-shift-x, 0px));
-            top: calc(50% + var(--melting-sheet-shift-y, 0px));
-            width: min(88vw, 56rem);
-            height: clamp(5rem, 12vh, 8rem);
-            border-radius: 999px 46% 999px 58%;
-            background:
-              linear-gradient(94deg, transparent 0 8%, rgba(109, 225, 255, 0.08) 20%, rgba(255, 238, 190, 0.24) 50%, rgba(255, 107, 69, 0.12) 72%, transparent 100%);
-            filter: blur(8px);
-            mix-blend-mode: screen;
-            opacity: 0.7;
-            transform: translate3d(-50%, -50%, 0) rotate(-2deg);
-            animation: melting-time-final-sheet-drift 9200ms ease-in-out infinite alternate;
-          }
-
-          .melting-time-final-liquid-sheet:nth-child(2) {
-            top: calc(43% + var(--melting-title-glass-shift-y, 0px));
-            width: min(70vw, 48rem);
-            height: clamp(4rem, 8vh, 5.8rem);
-            opacity: 0.48;
-            transform: translate3d(-50%, -50%, 0) rotate(3deg);
-            animation-duration: 8400ms;
-            animation-delay: -2400ms;
-          }
-
-          .melting-time-final-liquid-sheet:nth-child(3) {
-            top: calc(57% + var(--melting-title-glass-shift-y, 0px));
-            width: min(76vw, 50rem);
-            height: clamp(3.8rem, 9vh, 6.5rem);
-            opacity: 0.42;
-            transform: translate3d(-50%, -50%, 0) rotate(-4deg);
-            animation-duration: 10400ms;
-            animation-delay: -3600ms;
-          }
-
-          @keyframes melting-time-final-liquid-breathe {
-            0% {
-              transform: translate3d(-50%, -50%, 0) scale(0.94, 0.9);
-            }
-
-            100% {
-              transform: translate3d(-50%, -51.5%, 0) scale(1.04, 1.08);
-            }
-          }
-
-          @keyframes melting-time-final-liquid-line {
-            0% {
-              transform: translate3d(-50%, -50%, 0) scaleX(0.78) rotate(-0.35deg);
-              opacity: 0.52;
-            }
-
-            100% {
-              transform: translate3d(-50%, -50%, 0) scaleX(1.02) rotate(0.35deg);
-              opacity: 0.86;
-            }
-          }
-
-          @keyframes melting-time-final-sheet-drift {
-            0% {
-              transform: translate3d(-53%, -52%, 0) rotate(-3deg) scaleX(0.94);
-            }
-
-            100% {
-              transform: translate3d(-47%, -48%, 0) rotate(2deg) scaleX(1.05);
-            }
-          }
-
-          .melting-time-transition-slice {
-            position: absolute;
-            left: -8vw;
-            right: -8vw;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255, 224, 172, 0.3), rgba(255, 112, 64, 0.14), transparent);
-            transform-origin: 50% 50%;
-            will-change: transform, opacity;
-          }
-
-          .melting-time-transition-slice:nth-child(1) {
-            top: 30%;
-            transform: rotate(-1.2deg);
-          }
-
-          .melting-time-transition-slice:nth-child(2) {
-            top: 34%;
-            transform: rotate(0.8deg);
-          }
-
-          .melting-time-transition-slice:nth-child(3) {
-            top: 39%;
-            transform: rotate(-0.4deg);
-          }
-
-          .melting-time-transition-slice:nth-child(4) {
-            top: 43%;
-            transform: rotate(1.1deg);
-          }
-
-          .melting-time-transition-slice:nth-child(5) {
-            top: 48%;
-            transform: rotate(-0.7deg);
-          }
-
-          .melting-time-content-wrapper {
-            position: relative;
-            z-index: 3;
-            will-change: transform, opacity, filter;
-          }
-
-          .melting-time-award-pill {
-            position: relative;
-            isolation: isolate;
-            overflow: hidden;
-            will-change: transform, opacity;
-          }
-
-          .melting-time-award-pill::before {
-            content: '';
-            position: absolute;
-            inset: -70% -24%;
-            z-index: -1;
-            background:
-              radial-gradient(circle at 22% 50%, rgba(112, 224, 255, 0.18), transparent 24%),
-              linear-gradient(104deg, transparent 0 28%, rgba(255, 225, 154, 0.24) 42%, rgba(255, 108, 72, 0.13) 54%, transparent 70% 100%);
-            opacity: 0.84;
-            transform: translate3d(-32%, 0, 0);
-            animation: melting-time-award-liquid-sheen 5400ms ease-in-out infinite;
-          }
-
-          @keyframes melting-time-award-liquid-sheen {
-            0%,
-            18% {
-              transform: translate3d(-34%, 0, 0);
-            }
-
-            62%,
-            100% {
-              transform: translate3d(34%, 0, 0);
-            }
-          }
-
-          @media (max-width: 639px) {
-            .melting-time-melt-field {
-              inset: -6vh -10vw;
-            }
-
-            .melting-time-memory-slit {
-              top: 36%;
-              width: 112vw;
-              height: clamp(5.8rem, 14vh, 8.2rem);
-            }
-
-            .melting-time-transition-line {
-              top: 39%;
-              width: 88vw;
-            }
-
-            .melting-time-transition-veil {
-              inset: -8vh -14vw;
-            }
-
-            .melting-time-memory-drip {
-              top: calc(35% + clamp(1.8rem, 5.5vh, 3.6rem));
-              width: 1px;
-            }
-
-            .melting-time-memory-drip:nth-child(1),
-            .melting-time-memory-drip:nth-child(7),
-            .melting-time-memory-drip:nth-child(10) {
-              display: none;
-            }
-
-            .melting-time-final-liquid::before {
-              width: 126vw;
-              top: 48%;
-              filter: blur(14px);
-            }
-
-            .melting-time-final-liquid::after {
-              width: 86vw;
-            }
-
-            .melting-time-final-liquid-sheet {
-              width: 98vw;
-              filter: blur(7px);
-            }
-          }
-
-          @media (prefers-reduced-motion: reduce) {
-            .melting-time-transition-line,
-            .melting-time-transition-sheen,
-            .melting-time-transition-slice,
-            .melting-time-melt-field,
-            .melting-time-memory-grain,
-            .melting-time-memory-drip {
-              display: none;
-            }
-
-            .melting-time-final-liquid::before,
-            .melting-time-final-liquid::after,
-            .melting-time-final-liquid-sheet,
-            .melting-time-title-liquid-layer,
-            .melting-time-award-pill::before {
-              animation: none;
-            }
-          }
-        `,
-        }}
-      />
-
       <div
         className={`melting-time-loader fixed inset-0 z-[120] grid h-screen w-screen place-items-center text-white transition-opacity duration-[820ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
           loadState === 'ready' ? 'pointer-events-none opacity-0' : 'opacity-100'

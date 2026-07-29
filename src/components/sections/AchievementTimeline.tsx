@@ -253,6 +253,8 @@ export const AchievementTimeline: React.FC = () => {
   useIsomorphicLayoutEffect(() => {
     if (reducedMotion) return;
 
+    gsap.registerPlugin(ScrollTrigger);
+
     const copy = copyRef.current;
     const artifactShell = artifactShellRef.current;
     const sectionGlow = sectionGlowRef.current;

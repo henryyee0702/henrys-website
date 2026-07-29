@@ -58,6 +58,7 @@ const PROFILES: Record<GpuTier, GpuProfile> = {
 
 /** Known weak / emulated GPU renderers. */
 const GPU_BLOCKLIST = /swiftshader|llvmpipe|software|microsoft basic/i;
+let cachedProfile: GpuProfile | undefined;
 
 function probeWebGL(): { available: boolean; renderer: string } {
   try {
@@ -88,26 +89,31 @@ function probeWebGL(): { available: boolean; renderer: string } {
  */
 export function detectGpuTier(): GpuProfile {
   if (typeof window === 'undefined') return PROFILES.fallback;
+  if (cachedProfile) return cachedProfile;
 
   // 1. Reduced motion
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    return PROFILES.fallback;
+    cachedProfile = PROFILES.fallback;
+    return cachedProfile;
   }
 
   // 2-3. WebGL availability + GPU blocklist
   const { available, renderer } = probeWebGL();
   if (!available || GPU_BLOCKLIST.test(renderer)) {
-    return PROFILES.fallback;
+    cachedProfile = PROFILES.fallback;
+    return cachedProfile;
   }
 
   // 4. Hardware concurrency
   if (navigator.hardwareConcurrency != null && navigator.hardwareConcurrency <= 2) {
-    return PROFILES.reduced;
+    cachedProfile = PROFILES.reduced;
+    return cachedProfile;
   }
 
   // 5. Device memory (Chrome only)
   if ('deviceMemory' in navigator && (navigator as Navigator & { deviceMemory?: number }).deviceMemory! <= 4) {
-    return PROFILES.reduced;
+    cachedProfile = PROFILES.reduced;
+    return cachedProfile;
   }
 
   // 6. Touch-primary phones, including landscape orientation
@@ -115,10 +121,12 @@ export function detectGpuTier(): GpuProfile {
   const shortScreenEdge = Math.min(window.screen.width, window.screen.height);
   const shortViewportEdge = Math.min(window.innerWidth, window.innerHeight);
   if (isTouchPrimary && (shortScreenEdge <= 820 || shortViewportEdge <= 620)) {
-    return PROFILES.reduced;
+    cachedProfile = PROFILES.reduced;
+    return cachedProfile;
   }
 
-  return PROFILES.full;
+  cachedProfile = PROFILES.full;
+  return cachedProfile;
 }
 
 /**

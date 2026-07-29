@@ -37,11 +37,6 @@ const colorChannels = (hex: string) => {
   };
 };
 
-const rgba = (body: UmbraBodySnapshot, alpha: number) => {
-  const { r, g, b } = colorChannels(body.color);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
 const writePathPoint = (
   output: Float32Array,
   offset: number,
@@ -114,6 +109,11 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
     const point = new Float32Array(2);
     const previousPoint = new Float32Array(2);
     const samples = quality === 'full' ? 22 : 12;
+    const channelsByColor = new Map(scene.bodies.map((body) => [body.color, colorChannels(body.color)]));
+    const rgbaForBody = (body: UmbraBodySnapshot, alpha: number) => {
+      const { r, g, b } = channelsByColor.get(body.color) ?? colorChannels(body.color);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -179,7 +179,7 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
           context.moveTo(previousPoint[0], previousPoint[1]);
           context.lineTo(point[0], point[1]);
           context.lineWidth = Math.max(0.55, body.sizePx * (0.08 + tidal * 0.11) * b);
-          context.strokeStyle = rgba(body, (0.025 + b * 0.24) * (1 - progress * 0.68));
+          context.strokeStyle = rgbaForBody(body, (0.025 + b * 0.24) * (1 - progress * 0.68));
           context.shadowColor = body.color;
           context.shadowBlur = 5 + tidal * 16;
           context.stroke();
@@ -204,8 +204,8 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
       context.globalCompositeOperation = 'lighter';
       const gradient = context.createRadialGradient(-baseRadius * 0.2, -baseRadius * 0.18, 0, 0, 0, baseRadius);
       gradient.addColorStop(0, `rgba(255,255,255,${0.94 * headAlpha})`);
-      gradient.addColorStop(0.25, rgba(body, 0.96 * headAlpha));
-      gradient.addColorStop(1, rgba(body, 0));
+      gradient.addColorStop(0.25, rgbaForBody(body, 0.96 * headAlpha));
+      gradient.addColorStop(1, rgbaForBody(body, 0));
       context.fillStyle = gradient;
       context.shadowColor = body.color;
       context.shadowBlur = 14 + tidal * 20;
@@ -221,7 +221,7 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
         context.scale(1 + tidal * 3.4, 1 - tidal * 0.55);
         context.beginPath();
         context.ellipse(0, 0, baseRadius * 1.85, baseRadius * 0.48, 0, 0, TAU);
-        context.strokeStyle = rgba(body, (0.52 - progress * 0.54) * headAlpha);
+        context.strokeStyle = rgbaForBody(body, (0.52 - progress * 0.54) * headAlpha);
         context.lineWidth = 0.8;
         context.shadowColor = body.color;
         context.shadowBlur = 9;
@@ -242,7 +242,7 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
     const render = (now: number) => {
       if (disposed) return;
       if (document.hidden) {
-        frame = requestAnimationFrame(render);
+        frame = 0;
         return;
       }
 
@@ -317,10 +317,17 @@ export const CelestialCollapse: React.FC<CelestialCollapseProps> = ({
     const handleVisibility = () => {
       if (document.hidden) {
         hiddenAt = performance.now();
-      } else if (hiddenAt > 0) {
-        pausedDuration += performance.now() - hiddenAt;
-        hiddenAt = 0;
+        cancelAnimationFrame(frame);
+        frame = 0;
+      } else {
+        if (hiddenAt > 0) {
+          pausedDuration += performance.now() - hiddenAt;
+          hiddenAt = 0;
+        }
         previousFrameAt = performance.now();
+        if (!disposed && !frame) {
+          frame = requestAnimationFrame(render);
+        }
       }
     };
 

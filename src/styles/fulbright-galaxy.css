@@ -1,0 +1,89 @@
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.umbra-probe__core,
+.umbra-probe__telemetry {
+  transition: opacity 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+
+.umbra-probe:hover .umbra-probe__core,
+.umbra-probe:focus-visible .umbra-probe__core {
+  border-color: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.15);
+}
+
+.umbra-probe[data-probe-state='dragging'] .umbra-probe__core {
+  border-color: rgba(245, 218, 157, 0.72);
+  box-shadow: 0 0 24px rgba(245, 190, 91, 0.17);
+}
+
+.umbra-probe[data-probe-state='holding'] .umbra-probe__core {
+  border-color: rgba(255, 229, 173, 0.92);
+  box-shadow: 0 0 28px rgba(255, 194, 74, 0.38), inset 0 0 10px rgba(255, 255, 255, 0.12);
+}
+
+.umbra-probe[data-probe-state='holding'] .umbra-probe__telemetry {
+  display: block;
+}
+
+.umbra-hold-progress {
+  appearance: none;
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.umbra-hold-progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.umbra-hold-progress::-webkit-progress-value {
+  background: rgba(246, 217, 147, 0.8);
+  box-shadow: 0 0 8px rgba(246, 217, 147, 0.45);
+}
+
+.umbra-hold-progress::-moz-progress-bar {
+  background: rgba(246, 217, 147, 0.8);
+}
+
+.fulbright-world,
+.fulbright-article-plane article {
+  transition:
+    opacity 2.8s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 2.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 2.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#fulbright-galaxy[data-umbra-active='true'] .fulbright-world {
+  opacity: 0.58;
+  filter: brightness(0.42) saturate(0.62);
+}
+
+#fulbright-galaxy[data-umbra-active='true'] [data-planet-node],
+#fulbright-galaxy[data-umbra-active='true'] [data-orbit-ring] {
+  opacity: 0 !important;
+}
+
+#fulbright-galaxy[data-umbra-active='true'] .fulbright-article-plane article {
+  opacity: 0.78;
+  filter: brightness(0.68);
+  transform: translate3d(-14px, 0, 0) scaleX(0.985);
+  transform-origin: 0 50%;
+}

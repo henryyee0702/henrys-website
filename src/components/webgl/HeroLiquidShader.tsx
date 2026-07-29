@@ -33,7 +33,9 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
-    let reqId: number;
+    let reqId = 0;
+    let isDisposed = false;
+    let isLoopRunning = false;
     const gpu = detectGpuTier();
     const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
     const reducedBudget = gpu.tier !== 'full' || isCoarsePointer;
@@ -44,12 +46,17 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     camera.position.z = 1;
     
-    const renderer = new THREE.WebGLRenderer({ 
-      canvas: canvasRef.current, 
-      alpha: true, 
-      antialias: false, 
-      powerPreference: "high-performance" 
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
+        alpha: true,
+        antialias: false,
+        powerPreference: "high-performance"
+      });
+    } catch {
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr)); 
 
     const textCanvas = document.createElement('canvas');
@@ -221,20 +228,14 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(containerRef.current);
     
-    // Intersection Observer to pause animation
-    const io = new IntersectionObserver(([entry]) => {
-      isVisibleRef.current = entry.isIntersecting;
-    });
-    io.observe(containerRef.current);
-
     const clock = new THREE.Clock();
     const idleTracker = new IdleTracker();
     let frameCount = 0;
 
     const renderLoop = () => {
+      if (isDisposed || !isLoopRunning) return;
       reqId = requestAnimationFrame(renderLoop);
       if (
-        !isVisibleRef.current ||
         shouldThrottleFrame(frameCount++, idleTracker.idle, {
           activeFrameInterval: fullInlineEffect ? 1 : reducedBudget ? 2 : 1,
           idleFrameInterval: reducedBudget ? 8 : 4,
@@ -280,16 +281,46 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
       material.uniforms.uVelocity.value = Math.min(velocity * 100.0, 10.0);
       renderer.render(scene, camera);
     };
-    renderLoop();
+
+    const stopLoop = () => {
+      isLoopRunning = false;
+      if (reqId) {
+        cancelAnimationFrame(reqId);
+        reqId = 0;
+      }
+    };
+
+    const startLoop = () => {
+      if (isDisposed || isLoopRunning || !isVisibleRef.current || document.hidden) return;
+      isLoopRunning = true;
+      reqId = requestAnimationFrame(renderLoop);
+    };
+
+    const io = new IntersectionObserver(([entry]) => {
+      isVisibleRef.current = entry.isIntersecting;
+      if (isVisibleRef.current) startLoop();
+      else stopLoop();
+    });
+    io.observe(containerRef.current);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) stopLoop();
+      else startLoop();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    startLoop();
 
     return () => {
-      cancelAnimationFrame(reqId);
+      isDisposed = true;
+      stopLoop();
       resizeObserver.disconnect();
       io.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       geometry.dispose();
       material.dispose();
       texture.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
     };
   }, [fitToContainer, interactionPadding?.x, interactionPadding?.y, mouseX, mouseY, text, variant]);
 

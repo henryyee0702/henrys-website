@@ -39,7 +39,7 @@ export const achievements: Achievement[] = [
     year: 2022,
     artifact: {
       recipe: 'book-award' as const,
-      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775571555/Screenshot_2026-04-07_at_9.58.49_PM_l4lej2.png',
+      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_100/v1775571555/Screenshot_2026-04-07_at_9.58.49_PM_l4lej2.png',
       backTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775611329/IMG_0118_yw68jf.jpg',
       orientation: 'landscape' as const,
       accentColor: '#1e3a8a',
@@ -68,7 +68,7 @@ export const achievements: Achievement[] = [
     year: 2024,
     artifact: {
       recipe: 'jogging-president' as const,
-      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775608844/Screenshot_2026-04-08_at_8.40.08_AM_bvkamu.png',
+      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_100/v1775608844/Screenshot_2026-04-08_at_8.40.08_AM_bvkamu.png',
       backTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775611329/IMG_0118_yw68jf.jpg',
       orientation: 'landscape' as const,
       accentColor: '#1e3a8a',
@@ -97,7 +97,7 @@ export const achievements: Achievement[] = [
     year: 2025,
     artifact: {
       recipe: 'micro-movie-gold' as const,
-      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775610744/Screenshot_2026-04-08_at_9.11.41_AM_y7e2pj.png',
+      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_100/v1775610744/Screenshot_2026-04-08_at_9.11.41_AM_y7e2pj.png',
       backTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775813157/1e14ff7bc43648f3883fef68fa41d48f_kotbrq.jpg',
       orientation: 'portrait' as const,
       accentColor: '#78350f',
@@ -126,7 +126,7 @@ export const achievements: Achievement[] = [
     year: 2026,
     artifact: {
       recipe: 'fulbright-emi' as const,
-      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/v1775609809/Screenshot_2026-04-08_at_8.56.25_AM_v2skd8.png',
+      frontTextureUrl: 'https://res.cloudinary.com/dt8x2v9id/image/upload/f_auto,q_100/v1775609809/Screenshot_2026-04-08_at_8.56.25_AM_v2skd8.png',
       orientation: 'landscape' as const,
       accentColor: '#7f1d1d',
       lightColor: GALLERY_WARM_LIGHT,

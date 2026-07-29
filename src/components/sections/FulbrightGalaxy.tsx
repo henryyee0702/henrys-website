@@ -9,6 +9,7 @@ import type { EpisodeNode } from '@/content/fulbright-episodes';
 import { SecretDividerHandle } from '@/components/sections/fulbright/SecretDividerHandle';
 import { preloadUmbraVisual, UmbraExperience } from '@/components/sections/fulbright/UmbraExperience';
 import type { UmbraOrigin, UmbraSceneSnapshot } from '@/components/sections/fulbright/umbra-types';
+import '@/styles/fulbright-galaxy.css';
 
 // ==========================================
 // 1. Configuration
@@ -467,31 +468,16 @@ export const FulbrightGalaxy: React.FC = () => {
 
   // Animation loop
   useEffect(() => {
-    if (reducedMotion) return;
-    let reqId: number;
+    if (reducedMotion || umbraActive) return;
+    let reqId = 0;
+    let isLoopRunning = false;
     let lastTime = performance.now();
     let lastRenderTime = 0;
     let isSectionVisible = true;
     const minFrameMs = lowPower ? 1000 / 30 : 1000 / 60;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        isSectionVisible = entry.isIntersecting;
-      },
-      { rootMargin: '180px' },
-    );
-
-    const section = sectionRef.current;
-    if (section) {
-      observer.observe(section);
-    }
-
     const loop = (timestamp: number) => {
-      if (!isSectionVisible || document.hidden || stateRefs.current.umbraActive) {
-        lastTime = timestamp;
-        reqId = requestAnimationFrame(loop);
-        return;
-      }
+      if (!isLoopRunning) return;
 
       if (timestamp - lastRenderTime < minFrameMs) {
         reqId = requestAnimationFrame(loop);
@@ -508,8 +494,12 @@ export const FulbrightGalaxy: React.FC = () => {
         start + (end - start) * (1 - Math.pow(1 - factor, timeScale));
 
       const state = stateRefs.current;
+      let hasMotionWork = state.isActuallyPlaying || state.phase !== 'idle';
 
       speedMultiplier.current = frameAwareLerp(speedMultiplier.current, targetSpeedMultiplier.current, CONFIG.TIMING.LERP_FACTOR_SPEED);
+      if (Math.abs(speedMultiplier.current - targetSpeedMultiplier.current) > 0.001) {
+        hasMotionWork = true;
+      }
 
       if (state.isActuallyPlaying || speedMultiplier.current > 1.05) {
         for (const node of EPISODES) {
@@ -535,6 +525,12 @@ export const FulbrightGalaxy: React.FC = () => {
 
       cameraOffset.current.x = frameAwareLerp(cameraOffset.current.x, targetCamX, CONFIG.TIMING.LERP_FACTOR_CAM);
       cameraOffset.current.y = frameAwareLerp(cameraOffset.current.y, targetCamY, CONFIG.TIMING.LERP_FACTOR_CAM);
+      if (
+        Math.abs(cameraOffset.current.x - targetCamX) > 0.01 ||
+        Math.abs(cameraOffset.current.y - targetCamY) > 0.01
+      ) {
+        hasMotionWork = true;
+      }
 
       if (sceneRef.current) {
         sceneRef.current.style.transform = `translate3d(${cameraOffset.current.x}px, ${cameraOffset.current.y}px, 0)`;
@@ -555,15 +551,27 @@ export const FulbrightGalaxy: React.FC = () => {
 
         const targetZ = isTarget && isPushin ? 100 : 0;
         physicalZ.current[node.id] = frameAwareLerp(physicalZ.current[node.id], targetZ, CONFIG.TIMING.LERP_FACTOR_Z);
+        if (Math.abs(physicalZ.current[node.id] - targetZ) > 0.001) {
+          hasMotionWork = true;
+        }
 
         const targetNodeScale = ((isHovered || isSelected) && !isZooming) || (isTarget && isZooming) ? 1.15 : 1;
         physicalScale.current[node.id] = frameAwareLerp(physicalScale.current[node.id], targetNodeScale, 0.15);
+        if (Math.abs(physicalScale.current[node.id] - targetNodeScale) > 0.001) {
+          hasMotionWork = true;
+        }
 
         const targetLabelY = (isHovered || isSelected) && !isZooming ? -8 : 0;
         physicalLabelY.current[node.id] = frameAwareLerp(physicalLabelY.current[node.id], targetLabelY, 0.15);
+        if (Math.abs(physicalLabelY.current[node.id] - targetLabelY) > 0.001) {
+          hasMotionWork = true;
+        }
 
         const targetLabelScale = (isHovered || isSelected) && !isZooming ? 1.1 : 1;
         physicalLabelScale.current[node.id] = frameAwareLerp(physicalLabelScale.current[node.id], targetLabelScale, 0.15);
+        if (Math.abs(physicalLabelScale.current[node.id] - targetLabelScale) > 0.001) {
+          hasMotionWork = true;
+        }
 
         const elRefs = planetRefs.current[node.id];
         if (elRefs?.root) {
@@ -574,15 +582,65 @@ export const FulbrightGalaxy: React.FC = () => {
         }
       }
 
+      if (!hasMotionWork) {
+        stopLoop();
+        return;
+      }
+
       reqId = requestAnimationFrame(loop);
     };
 
-    reqId = requestAnimationFrame(loop);
+    const stopLoop = () => {
+      isLoopRunning = false;
+      if (reqId) {
+        cancelAnimationFrame(reqId);
+        reqId = 0;
+      }
+    };
+
+    const startLoop = () => {
+      if (isLoopRunning || !isSectionVisible || document.hidden) return;
+      isLoopRunning = true;
+      lastTime = performance.now();
+      reqId = requestAnimationFrame(loop);
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isSectionVisible = entry.isIntersecting;
+        if (isSectionVisible) startLoop();
+        else stopLoop();
+      },
+      { rootMargin: '180px' },
+    );
+
+    const section = sectionRef.current;
+    if (section) {
+      observer.observe(section);
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) stopLoop();
+      else startLoop();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    startLoop();
+
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(reqId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopLoop();
     };
-  }, [lowPower, reducedMotion]);
+  }, [
+    hoveredPlanet,
+    isUserPaused,
+    lowPower,
+    machineState.activeArticle,
+    machineState.phase,
+    machineState.targetId,
+    reducedMotion,
+    umbraActive,
+  ]);
 
   const handleNextArticle = (nextArticle: EpisodeNode) => {
     if (machineState.phase !== 'idle') return;
@@ -690,31 +748,6 @@ export const FulbrightGalaxy: React.FC = () => {
       data-umbra-active={umbraActive}
       className="relative h-[100svh] overflow-hidden border-y border-white/[0.05] bg-[#020308] md:h-screen"
     >
-      <style>{`
-        .preserve-3d { transform-style: preserve-3d; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
-        .umbra-probe__core,
-        .umbra-probe__telemetry { transition: opacity 300ms ease, border-color 300ms ease, box-shadow 300ms ease; }
-        .umbra-probe:hover .umbra-probe__core,
-        .umbra-probe:focus-visible .umbra-probe__core { border-color: rgba(255,255,255,.62); box-shadow: 0 0 22px rgba(255,255,255,.15); }
-        .umbra-probe[data-probe-state=dragging] .umbra-probe__core { border-color: rgba(245,218,157,.72); box-shadow: 0 0 24px rgba(245,190,91,.17); }
-        .umbra-probe[data-probe-state=holding] .umbra-probe__core { border-color: rgba(255,229,173,.92); box-shadow: 0 0 28px rgba(255,194,74,.38), inset 0 0 10px rgba(255,255,255,.12); }
-        .umbra-probe[data-probe-state=holding] .umbra-probe__telemetry { display: block; }
-        .umbra-hold-progress { appearance: none; border: 0; background: rgba(255,255,255,.12); }
-        .umbra-hold-progress::-webkit-progress-bar { background: rgba(255,255,255,.12); }
-        .umbra-hold-progress::-webkit-progress-value { background: rgba(246,217,147,.8); box-shadow: 0 0 8px rgba(246,217,147,.45); }
-        .umbra-hold-progress::-moz-progress-bar { background: rgba(246,217,147,.8); }
-        .fulbright-world,
-        .fulbright-article-plane article { transition: opacity 2.8s cubic-bezier(.16,1,.3,1), filter 2.8s cubic-bezier(.16,1,.3,1), transform 2.8s cubic-bezier(.16,1,.3,1); }
-        #fulbright-galaxy[data-umbra-active=true] .fulbright-world { opacity: .58; filter: brightness(.42) saturate(.62); }
-        #fulbright-galaxy[data-umbra-active=true] [data-planet-node],
-        #fulbright-galaxy[data-umbra-active=true] [data-orbit-ring] { opacity: 0 !important; }
-        #fulbright-galaxy[data-umbra-active=true] .fulbright-article-plane article { opacity: .78; filter: brightness(.68); transform: translate3d(-14px,0,0) scaleX(.985); transform-origin: 0 50%; }
-      `}</style>
-
       {/* Background layers */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02)_0%,transparent_80%)] pointer-events-none" />
       {!lowPower && (

@@ -236,6 +236,7 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
     let mesh: Mesh | null = null;
     let frame = 0;
     let resizeFrame = 0;
+    let renderLoop: FrameRequestCallback | null = null;
     let disposed = false;
     let contextLost = false;
     let startedAt = performance.now();
@@ -250,6 +251,8 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
     const handleContextLost = (event: Event) => {
       event.preventDefault();
       contextLost = true;
+      cancelAnimationFrame(frame);
+      frame = 0;
       onError?.();
     };
 
@@ -270,10 +273,17 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
     const handleVisibility = () => {
       if (document.hidden) {
         hiddenAt = performance.now();
-      } else if (hiddenAt > 0) {
-        pausedDuration += performance.now() - hiddenAt;
-        hiddenAt = 0;
+        cancelAnimationFrame(frame);
+        frame = 0;
+      } else {
+        if (hiddenAt > 0) {
+          pausedDuration += performance.now() - hiddenAt;
+          hiddenAt = 0;
+        }
         previousRenderedAt = performance.now();
+        if (renderLoop && !disposed && !contextLost && !frame) {
+          frame = requestAnimationFrame(renderLoop);
+        }
       }
     };
 
@@ -323,10 +333,11 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
       startedAt = performance.now();
       onReady?.();
 
-      const render = (now: number) => {
+      renderLoop = (now: number) => {
         if (disposed) return;
-        frame = requestAnimationFrame(render);
+        frame = 0;
         if (document.hidden || contextLost || !renderer || !scene || !camera || !material) return;
+        frame = requestAnimationFrame(renderLoop!);
 
         const elapsed = Math.max(0, (now - startedAt - pausedDuration) / 1000);
         const isGateIdle = phaseRef.current === 'gate';
@@ -356,7 +367,7 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
         renderer.render(scene, camera);
       };
 
-      frame = requestAnimationFrame(render);
+      frame = requestAnimationFrame(renderLoop);
     };
 
     canvas.addEventListener('webglcontextlost', handleContextLost);
@@ -389,6 +400,7 @@ export const CinematicBlackHole: React.FC<CinematicBlackHoleProps> = ({ scene: s
       geometry = null;
       material = null;
       mesh = null;
+      renderLoop = null;
     };
   }, [onError, onReady, quality, sceneSnapshot]);
 
