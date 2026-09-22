@@ -310,6 +310,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
     let pointerFrameId = 0;
     let isRenderLoopRunning = false;
     let mainSceneCovered = false;
+    let needsRender = true;
     let loaderTimeout = 0;
     let gsapContext: { revert: () => void } | undefined;
 
@@ -440,6 +441,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         this.context.fillRect(0, 0, width, height);
         this.context.drawImage(source, drawX, 0, drawWidth, height);
         this.texture.needsUpdate = true;
+        needsRender = true;
       },
 
       init() {
@@ -721,6 +723,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         heroMaterial.uniforms.uFrameOffset.value.set(getHeroFrameOffsetX(), 0);
         setThermalPointer(window.innerWidth * 0.5, window.innerHeight * 0.48, 0.62);
         scrubEngine.redrawCurrentFrame();
+        needsRender = true;
       },
       mousemove: (event: MouseEvent) => {
         scheduleThermalPointer(event.clientX, event.clientY, 0.82);
@@ -856,7 +859,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       });
 
       const textureLoader = new THREE.TextureLoader();
-      keyboardTexture = textureLoader.load(ASSETS.keyboardTexture, undefined, undefined, () => undefined);
+      keyboardTexture = textureLoader.load(ASSETS.keyboardTexture, () => { needsRender = true; }, undefined, () => undefined);
       keyboardMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         alphaMap: keyboardTexture,
@@ -1003,6 +1006,13 @@ export const MeltingTimeWorkExperience: React.FC = () => {
       heroMaterial.uniforms.uVel.value = currentVelocity;
       heroMaterial.uniforms.uRadiusMult.value = currentRadius;
 
+      // The laptop is static between scroll/texture updates. Keep the liquid shader
+      // animated, but do not submit identical laptop frames to the GPU while idle.
+      if (!needsRender && heroMaterial.uniforms.uAlpha.value === 0) {
+        rafId = requestAnimationFrame(renderLoop);
+        return;
+      }
+      needsRender = false;
       renderer.clear();
 
       if (heroMaterial.uniforms.uAlpha.value < 1) {
@@ -1026,6 +1036,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
 
     const startRenderLoop = () => {
       if (disposed || isRenderLoopRunning || mainSceneCovered || document.hidden) return;
+      needsRender = true;
       isRenderLoopRunning = true;
       rafId = requestAnimationFrame(renderLoop);
     };
@@ -1184,6 +1195,7 @@ export const MeltingTimeWorkExperience: React.FC = () => {
         });
 
         const timeline = gsap.timeline({
+          onUpdate: () => { needsRender = true; },
           scrollTrigger: {
             trigger: '.melting-time-scroll-track',
             start: 'top top',

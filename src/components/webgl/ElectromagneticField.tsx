@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo } from 'react';
-import { useReducedMotion, type MotionValue } from 'framer-motion';
+import { type MotionValue } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface ElectromagneticFieldProps {
@@ -9,7 +9,7 @@ interface ElectromagneticFieldProps {
 
 export const ElectromagneticField: React.FC<ElectromagneticFieldProps> = memo(({ mouseX, mouseY }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const prefersReduced = useReducedMotion();
+  const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const shouldRender = !prefersReduced && !isCoarsePointer;
   const isVisibleRef = useRef(false);

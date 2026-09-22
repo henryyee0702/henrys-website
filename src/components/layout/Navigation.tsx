@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 
 const WRITING_MENU_ITEMS = [
@@ -19,6 +20,8 @@ const WRITING_MENU_ITEMS = [
 export const Navigation: React.FC = () => {
   const [writingOpen, setWritingOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuItemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -30,8 +33,17 @@ export const Navigation: React.FC = () => {
     menuItemRefs.current[index]?.focus();
   };
 
+  const positionMenu = () => {
+    const rect = dropdownRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const top = rect.bottom + 8;
+    const right = Math.max(8, document.documentElement.clientWidth - rect.right);
+    setMenuPosition((current) => current.top === top && current.right === right ? current : { top, right });
+  };
+
   const openMenu = (focusIndex?: number) => {
     clearTimeout(timeoutRef.current);
+    positionMenu();
     setWritingOpen(true);
 
     if (focusIndex !== undefined) {
@@ -41,7 +53,8 @@ export const Navigation: React.FC = () => {
 
   const toggleMenu = () => {
     clearTimeout(timeoutRef.current);
-    setWritingOpen(prev => !prev);
+    if (writingOpen) setWritingOpen(false);
+    else openMenu();
   };
 
   const closeMenu = () => {
@@ -103,12 +116,23 @@ export const Navigation: React.FC = () => {
 
     if (event.key === 'Tab') {
       closeMenuImmediately();
+      menuButtonRef.current?.focus();
     }
   };
 
   useEffect(() => {
+    if (!writingOpen) return;
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    return () => {
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
+    };
+  }, [writingOpen]);
+
+  useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (!dropdownRef.current?.contains(event.target as Node)) {
+      if (!dropdownRef.current?.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) {
         closeMenuImmediately();
       }
     };
@@ -145,12 +169,13 @@ export const Navigation: React.FC = () => {
         <div
           ref={dropdownRef}
           className="relative"
-          onMouseEnter={() => openMenu()}
+          onMouseEnter={() => clearTimeout(timeoutRef.current)}
           onMouseLeave={closeMenu}
         >
           <div className={`flex items-stretch rounded-full transition-all duration-300 ${writingOpen ? 'bg-white/[0.06]' : 'hover:bg-white/[0.06]'}`}>
             <a
               href="/writing"
+              onMouseEnter={() => openMenu()}
               onClick={closeMenuImmediately}
               className="interactive-node group flex flex-col items-center justify-center pl-2 pr-1 max-[393px]:pl-2 max-[393px]:pr-1 min-[394px]:max-[430px]:pl-2.5 min-[394px]:max-[430px]:pr-1.5 min-[768px]:max-[1024px]:pl-3 min-[768px]:max-[1024px]:pr-1.5 py-1.5 rounded-l-full text-[#B7B8C0] hover:text-white transition-all duration-300 shrink-0"
             >
@@ -172,13 +197,17 @@ export const Navigation: React.FC = () => {
               <ChevronDown size={14} className={`transition-transform duration-300 ${writingOpen ? 'rotate-180' : ''}`} />
             </button>
           </div>
-          {writingOpen && (
+          {writingOpen && createPortal(
             <div
+              ref={menuRef}
               id={menuId}
-              className="absolute right-0 top-full mt-2 w-40 min-[394px]:max-[430px]:w-44 rounded-xl border border-white/10 bg-[#111113]/95 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] py-1.5 z-50"
+              className="fixed w-40 min-[394px]:max-[430px]:w-44 rounded-xl border border-white/10 bg-[#111113]/95 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] py-1.5 z-50"
+              style={menuPosition}
               role="menu"
               aria-labelledby={menuButtonId}
               onKeyDown={handleMenuKeyDown}
+              onMouseEnter={() => clearTimeout(timeoutRef.current)}
+              onMouseLeave={closeMenu}
             >
               {WRITING_MENU_ITEMS.map((item, index) => (
                 <React.Fragment key={item.href}>
@@ -207,7 +236,8 @@ export const Navigation: React.FC = () => {
                   </a>
                 </React.Fragment>
               ))}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
 

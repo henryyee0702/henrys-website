@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { useReducedMotion } from 'framer-motion';
 import { useGpuTier, adaptCloudinaryUrl } from '@/components/webgl/gpu-tier';
 import { ThreeRectangleLoader } from '@/components/ui/ThreeRectangleLoader';
 import { IdleTracker, shouldThrottleFrame } from '@/lib/adaptive-render';
@@ -472,7 +471,7 @@ const createArtifactResources = (
 };
 
 export const HonorArtifactPreview: React.FC<{ artifact: HonorArtifactConfig }> = ({ artifact }) => {
-  const prefersReduced = useReducedMotion();
+  const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const gpu = useGpuTier();
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const lowPower = gpu.tier === 'reduced' || isCoarsePointer;

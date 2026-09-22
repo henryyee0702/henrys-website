@@ -42,15 +42,14 @@ export const HomepageShowreel: React.FC = () => {
           <video
             data-homepage-showreel-video
             poster={HOMEPAGE_SHOWREEL_POSTER_SRC}
-            autoPlay
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="none"
             className="block h-full w-full object-cover object-center"
           >
-            <source media="(max-width: 767px)" src={HOMEPAGE_SHOWREEL_VIDEO_MOBILE_SRC} type="video/mp4" />
-            <source src={HOMEPAGE_SHOWREEL_VIDEO_DESKTOP_SRC} type="video/mp4" />
+            <source media="(max-width: 767px)" data-src={HOMEPAGE_SHOWREEL_VIDEO_MOBILE_SRC} type="video/mp4" />
+            <source data-src={HOMEPAGE_SHOWREEL_VIDEO_DESKTOP_SRC} type="video/mp4" />
           </video>
         </div>
 

@@ -89,13 +89,13 @@ function probeWebGL(): { available: boolean; renderer: string } {
  */
 export function detectGpuTier(): GpuProfile {
   if (typeof window === 'undefined') return PROFILES.fallback;
-  if (cachedProfile) return cachedProfile;
 
   // 1. Reduced motion
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    cachedProfile = PROFILES.fallback;
-    return cachedProfile;
+    return PROFILES.fallback;
   }
+
+  if (cachedProfile) return cachedProfile;
 
   // 2-3. WebGL availability + GPU blocklist
   const { available, renderer } = probeWebGL();
@@ -151,6 +151,7 @@ export function adaptCloudinaryUrl(url: string, tier: GpuTier): string {
 
 // ── React hook ──────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 /**
  * React hook that returns the GPU profile.
@@ -159,10 +160,11 @@ import { useState, useEffect } from 'react';
  */
 export function useGpuTier(): GpuProfile {
   const [profile, setProfile] = useState<GpuProfile>(PROFILES.fallback);
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
     setProfile(detectGpuTier());
-  }, []);
+  }, [reducedMotion]);
 
   return profile;
 }
