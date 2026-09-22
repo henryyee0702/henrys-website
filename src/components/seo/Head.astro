@@ -69,6 +69,8 @@ const resolvedOg = toAbsoluteSiteUrl(rawOg) ?? (Astro.site ? new URL(DEFAULT_OG,
 <meta name="description" content={description} />
 <meta name="theme-color" content="#050505" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
+<!-- Keep the default tab icon without requesting a nonexistent favicon.ico. -->
+<link rel="icon" href="data:," />
 <title>{pageTitle}</title>
 
 <!-- Open Graph -->

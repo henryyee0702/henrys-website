@@ -11,6 +11,7 @@ interface HeroLiquidShaderProps {
   className?: string;
   fitToContainer?: boolean;
   variant?: 'default' | 'inline';
+  onReady?: (ready: boolean) => void;
   interactionPadding?: {
     x: number;
     y: number;
@@ -24,6 +25,7 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
   className = '',
   fitToContainer = false,
   variant = 'default',
+  onReady,
   interactionPadding,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -225,6 +227,8 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
       }
     };
     handleResize();
+    renderer.render(scene, camera);
+    onReady?.(true);
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(containerRef.current);
     
@@ -321,8 +325,9 @@ export const HeroLiquidShader: React.FC<HeroLiquidShaderProps> = ({
       texture.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
+      onReady?.(false);
     };
-  }, [fitToContainer, interactionPadding?.x, interactionPadding?.y, mouseX, mouseY, text, variant]);
+  }, [fitToContainer, interactionPadding?.x, interactionPadding?.y, mouseX, mouseY, onReady, text, variant]);
 
   return (
     <div

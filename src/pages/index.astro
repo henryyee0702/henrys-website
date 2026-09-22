@@ -20,13 +20,6 @@ import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
     type="font/woff2"
     crossorigin="anonymous"
   />
-  <link slot="head" rel="preconnect" href="https://fonts.googleapis.com" />
-  <link slot="head" rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link
-    slot="head"
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
-    rel="stylesheet"
-  />
   <link slot="head" rel="preload" as="image" href={HOMEPAGE_SHOWREEL_POSTER_SRC} />
   <CustomCursor client:media="(pointer: fine) and (hover: hover) and (min-width: 1024px)" />
   <NoiseOverlay />
@@ -50,6 +43,7 @@ import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
 
     if (showreelVideo) {
       let isVisible = true;
+      let sourcesLoaded = false;
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const syncPlayback = () => {
         if (document.hidden || !isVisible || prefersReducedMotion.matches) {
@@ -57,6 +51,13 @@ import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
           return;
         }
 
+        if (!sourcesLoaded) {
+          showreelVideo.querySelectorAll<HTMLSourceElement>('source[data-src]').forEach((source) => {
+            source.src = source.dataset.src!;
+          });
+          sourcesLoaded = true;
+          showreelVideo.load();
+        }
         void showreelVideo.play().catch(() => {});
       };
 
@@ -73,7 +74,9 @@ import { FulbrightGalaxy } from '@/components/sections/FulbrightGalaxy';
       }
 
       document.addEventListener('visibilitychange', syncPlayback);
-      window.addEventListener('pagehide', () => showreelVideo.pause(), { once: true });
+      prefersReducedMotion.addEventListener('change', syncPlayback);
+      window.addEventListener('pageshow', syncPlayback);
+      window.addEventListener('pagehide', () => showreelVideo.pause());
       syncPlayback();
     }
   </script>

@@ -1,11 +1,10 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
-import { useReducedMotion } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export const CustomCursor: React.FC = memo(() => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
-  const prefersReduced = useReducedMotion();
+  const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const isFine = useMediaQuery('(pointer: fine) and (hover: hover)');
 
   useEffect(() => {

@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { useMotionValue } from 'framer-motion';
 import { gsap } from 'gsap';
 import { ElectromagneticField } from '@/components/webgl/ElectromagneticField';
-import { HeroLiquidShader } from '@/components/webgl/HeroLiquidShader';
+import type { HeroLiquidShader } from '@/components/webgl/HeroLiquidShader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useGpuTier } from '@/components/webgl/gpu-tier';
 
@@ -355,14 +355,38 @@ const ArtistLiquidWord: React.FC<{
   mouseY: ReturnType<typeof useMotionValue<number>>;
   wordClassName: string;
 }> = ({ word, reducedMotion, mouseX, mouseY, wordClassName }) => {
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const [Shader, setShader] = useState<typeof HeroLiquidShader | null>(null);
+  const [shaderReady, setShaderReady] = useState(false);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (reducedMotion || !wrapper || Shader) return;
+    let disposed = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      void import('@/components/webgl/HeroLiquidShader')
+        .then((module) => {
+          if (!disposed) setShader(() => module.HeroLiquidShader);
+        })
+        .catch(() => { /* Keep the original text readable if WebGL cannot load. */ });
+    }, { rootMargin: '96px 0px' });
+    observer.observe(wrapper);
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, [reducedMotion, Shader]);
+
   if (reducedMotion) {
     return <span className={wordClassName}>{word}</span>;
   }
 
   return (
-    <span className="relative inline-block align-baseline">
-      <span className={`${wordClassName} invisible select-none`}>{word}</span>
-      <HeroLiquidShader
+    <span ref={wrapperRef} className="relative inline-block align-baseline">
+      <span className={`${wordClassName} ${shaderReady ? 'invisible select-none' : ''}`}>{word}</span>
+      {Shader && <Shader
         text={word}
         mouseX={mouseX}
         mouseY={mouseY}
@@ -370,7 +394,8 @@ const ArtistLiquidWord: React.FC<{
         variant="inline"
         interactionPadding={ARTIST_INTERACTION_PADDING}
         className="pointer-events-none absolute inset-0"
-      />
+        onReady={setShaderReady}
+      />}
     </span>
   );
 };

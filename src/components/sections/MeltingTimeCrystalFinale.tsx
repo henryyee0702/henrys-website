@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'framer-motion';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useGpuTier } from '@/components/webgl/gpu-tier';
@@ -99,7 +98,7 @@ export const MeltingTimeCrystalFinale: React.FC = () => {
   const pointerPressedRef = useRef(false);
   const gpu = useGpuTier();
   const coarsePointer = useMediaQuery('(pointer: coarse)');
-  const reducedMotion = Boolean(useReducedMotion());
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [displayedTitleChars, setDisplayedTitleChars] = useState(TITLE_CHARS);
   const [shouldInitialize, setShouldInitialize] = useState(false);
   const [renderMode, setRenderMode] = useState<'pending' | 'webgl' | 'fallback'>('pending');
