@@ -51,7 +51,18 @@ interface ViewportState {
 
 type GateStatus = 'idle' | 'checking' | 'rejected' | 'unavailable' | 'cooldown' | 'accepted';
 
-const PASSWORD_LENGTH = 7;
+const ARCHIVE_GATE_CONFIG = {
+  umbra: {
+    endpoint: '/api/umbra',
+    passwordLength: 7,
+    hint: 'MMDD SHEEP',
+  },
+  birthday: {
+    endpoint: '/api/birthday',
+    passwordLength: 8,
+    hint: 'YYYYMMDD',
+  },
+} as const;
 
 const readViewport = (): ViewportState => {
   const width = Math.max(1, window.innerWidth);
@@ -68,6 +79,7 @@ const readViewport = (): ViewportState => {
 };
 
 export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismiss }) => {
+  const gateConfig = ARCHIVE_GATE_CONFIG[scene.archive];
   const [phase, setPhase] = useState<UmbraVisualPhase>('collapse');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<GateStatus>('idle');
@@ -227,7 +239,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
     requestControllerRef.current = controller;
 
     try {
-      const response = await fetch('/api/umbra', {
+      const response = await fetch(gateConfig.endpoint, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
@@ -251,7 +263,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
 
       setStatus('accepted');
       setPhase('unlocking');
-      const destination = typeof result.destination === 'string' ? result.destination : '/api/umbra';
+      const destination = typeof result.destination === 'string' ? result.destination : gateConfig.endpoint;
       navigationTimerRef.current = window.setTimeout(() => {
         window.location.assign(destination);
       }, reducedMotion ? 520 : 2450);
@@ -371,7 +383,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
           <form className="mt-5 md:mt-6" onSubmit={handleSubmit} noValidate>
             <label className="sr-only" htmlFor="umbra-password">私人軌道密碼</label>
             <div className="umbra-password-track relative flex min-h-14 items-center gap-[clamp(.45rem,2vw,1.25rem)] border-b border-white/16 pr-[6.8rem] focus-within:border-[#f2d18a]/58">
-              {Array.from({ length: PASSWORD_LENGTH }, (_, index) => (
+              {Array.from({ length: gateConfig.passwordLength }, (_, index) => (
                 <span
                   key={`password-orb-${index}`}
                   className="umbra-password-orb h-2.5 w-2.5 shrink-0 rounded-full border border-[#ffedbe]/45 bg-[#ffedbe]/15 shadow-[0_0_9px_rgba(255,205,119,.22)] transition-all duration-300"
@@ -384,7 +396,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
                 id="umbra-password"
                 type="password"
                 value={password}
-                maxLength={PASSWORD_LENGTH}
+                maxLength={gateConfig.passwordLength}
                 autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}
@@ -405,7 +417,7 @@ export const UmbraExperience: React.FC<UmbraExperienceProps> = ({ scene, onDismi
               </button>
             </div>
             <p id="umbra-gate-description" className="mt-3 text-[8px] uppercase tracking-[0.28em] text-white/30 md:mt-4 md:text-[9px]" style={{ fontFamily: '"JetBrains Mono", monospace' }}>
-              MMDD SHEEP
+              {gateConfig.hint}
             </p>
             <p
               key={`${status}-${attempt}`}

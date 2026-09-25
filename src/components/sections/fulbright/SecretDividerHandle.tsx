@@ -2,9 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { UmbraOrigin } from './umbra-types';
 
-const DISPLAY_DURATION_SECONDS = 7.02;
 const HOLD_SPEED_MULTIPLIER = 2;
-const HOLD_DURATION_MS = (DISPLAY_DURATION_SECONDS * 1000) / HOLD_SPEED_MULTIPLIER;
 const TARGET_PADDING = 22;
 
 interface SecretDividerHandleProps {
@@ -12,6 +10,8 @@ interface SecretDividerHandleProps {
   enabled: boolean;
   panelLeft: number;
   isMobile: boolean;
+  displayDurationSeconds: number;
+  targetLabel: string;
   sectionRef: React.RefObject<HTMLElement>;
   getTargetRect: () => DOMRect | null;
   onIntent?: () => void;
@@ -27,6 +27,8 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
   enabled,
   panelLeft,
   isMobile,
+  displayDurationSeconds,
+  targetLabel,
   sectionRef,
   getTargetRect,
   onIntent,
@@ -54,8 +56,8 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
 
   const paintProgress = useCallback((progress: number) => {
     if (progressRef.current) progressRef.current.value = progress;
-    if (timeRef.current) timeRef.current.textContent = `${(progress * DISPLAY_DURATION_SECONDS).toFixed(2)} S`;
-  }, []);
+    if (timeRef.current) timeRef.current.textContent = `${(progress * displayDurationSeconds).toFixed(2)} S`;
+  }, [displayDurationSeconds]);
 
   const cancelHold = useCallback(() => {
     if (holdFrameRef.current !== null) cancelAnimationFrame(holdFrameRef.current);
@@ -117,7 +119,8 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
         cancelHold();
         return;
       }
-      const progress = clamp((now - holdStartRef.current) / HOLD_DURATION_MS, 0, 1);
+      const holdDurationMs = (displayDurationSeconds * 1000) / HOLD_SPEED_MULTIPLIER;
+      const progress = clamp((now - holdStartRef.current) / holdDurationMs, 0, 1);
       paintProgress(progress);
       if (progress >= 1) {
         holdFrameRef.current = null;
@@ -128,7 +131,7 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
     };
 
     holdFrameRef.current = requestAnimationFrame(tick);
-  }, [cancelHold, enabled, finish, getTargetRect, isInsideTarget, paintProgress]);
+  }, [cancelHold, displayDurationSeconds, enabled, finish, getTargetRect, isInsideTarget, paintProgress]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!visible || completedRef.current) return;
@@ -231,7 +234,7 @@ export const SecretDividerHandle: React.FC<SecretDividerHandleProps> = ({
       type="button"
       data-umbra-probe
       data-probe-state={probeState}
-      aria-label={enabled ? '文章分隔控制點；拖曳至太陽或按 Enter 啟動 7.02 秒穩定程序' : '文章分隔控制點'}
+      aria-label={enabled ? `文章分隔控制點；拖曳至${targetLabel}或按住空白鍵啟動 ${displayDurationSeconds.toFixed(2)} 秒穩定程序` : '文章分隔控制點'}
       aria-keyshortcuts="Space Enter"
       className="umbra-probe interactive-node absolute z-[70] h-12 w-12 touch-none select-none rounded-full p-0 outline-none"
       style={{

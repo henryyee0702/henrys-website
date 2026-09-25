@@ -13,6 +13,7 @@
     "check": "astro check",
     "lint": "eslint .",
     "archive:encrypt": "node scripts/build-umbra-archive.mjs",
+    "archive:birthday": "node scripts/build-umbra-archive.mjs birthday",
     "astro": "astro"
   },
   "dependencies": {

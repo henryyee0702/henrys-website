@@ -5,6 +5,10 @@
     "api/umbra.ts": {
       "includeFiles": "private/umbra.bundle",
       "maxDuration": 10
+    },
+    "api/birthday.ts": {
+      "includeFiles": "private/birthday.bundle",
+      "maxDuration": 10
     }
   },
   "headers": [

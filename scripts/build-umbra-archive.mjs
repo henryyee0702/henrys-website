@@ -8,10 +8,33 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, '..');
-const SOURCE_DIR = path.join(ROOT_DIR, 'references', '封存');
-const OUTPUT_FILE = path.join(ROOT_DIR, 'private', 'umbra.bundle');
 const ENV_FILE = path.join(ROOT_DIR, '.env.local');
 const MAGIC = Buffer.from('UMBRA01');
+const PROFILE_NAME = process.argv[2] || 'umbra';
+const PROFILES = {
+  umbra: {
+    sourceDir: path.join(ROOT_DIR, 'references', '封存'),
+    outputFile: path.join(ROOT_DIR, 'private', 'umbra.bundle'),
+    endpoint: '/api/umbra',
+    passwordKey: 'UMBRA_PASSWORD',
+    archiveKey: 'UMBRA_ARCHIVE_KEY',
+    sessionKey: 'UMBRA_SESSION_SECRET',
+  },
+  birthday: {
+    sourceDir: process.argv[3] || path.join(ROOT_DIR, 'references', 'birthday-card'),
+    entryFileOnly: true,
+    outputFile: path.join(ROOT_DIR, 'private', 'birthday.bundle'),
+    endpoint: '/api/birthday',
+    passwordKey: 'BIRTHDAY_PASSWORD',
+    archiveKey: 'BIRTHDAY_ARCHIVE_KEY',
+    sessionKey: 'BIRTHDAY_SESSION_SECRET',
+  },
+};
+const profile = PROFILES[PROFILE_NAME];
+
+if (!profile) {
+  throw new Error(`Unknown archive profile: ${PROFILE_NAME}`);
+}
 
 async function readHiddenPassword() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -20,7 +43,7 @@ async function readHiddenPassword() {
     return value.trim();
   }
 
-  process.stdout.write('Umbra password: ');
+  process.stdout.write(`${PROFILE_NAME} password: `);
   process.stdin.setRawMode(true);
   process.stdin.setEncoding('utf8');
   process.stdin.resume();
@@ -70,16 +93,16 @@ async function ensureLocalSecrets() {
 
   const current = parseEnv(source);
   const values = {
-    UMBRA_PASSWORD: process.env.UMBRA_PASSWORD || current.UMBRA_PASSWORD,
-    UMBRA_SESSION_SECRET: current.UMBRA_SESSION_SECRET || randomBytes(32).toString('hex'),
-    UMBRA_ARCHIVE_KEY: current.UMBRA_ARCHIVE_KEY || randomBytes(32).toString('hex'),
+    [profile.passwordKey]: process.env[profile.passwordKey] || current[profile.passwordKey],
+    [profile.sessionKey]: current[profile.sessionKey] || randomBytes(32).toString('hex'),
+    [profile.archiveKey]: current[profile.archiveKey] || randomBytes(32).toString('hex'),
   };
 
-  if (!values.UMBRA_PASSWORD) {
-    values.UMBRA_PASSWORD = await readHiddenPassword();
+  if (!values[profile.passwordKey]) {
+    values[profile.passwordKey] = await readHiddenPassword();
   }
 
-  if (!values.UMBRA_PASSWORD) {
+  if (!values[profile.passwordKey]) {
     throw new Error('The private password cannot be empty');
   }
 
@@ -115,7 +138,7 @@ function prepareHtml(source) {
   const noInlineErrorHandlers = withoutBlockedFont.replace(/\s+onerror\s*=\s*"[\s\S]*?"/gi, '');
   const withProtectedAssets = noInlineErrorHandlers.replace(
     /(["'])photos\/([^"']+)\1/g,
-    (_match, quote, fileName) => `${quote}/api/umbra?asset=${encodeURIComponent(`photos/${fileName}`)}${quote}`,
+    (_match, quote, fileName) => `${quote}${profile.endpoint}?asset=${encodeURIComponent(`photos/${fileName}`)}${quote}`,
   );
 
   return withProtectedAssets.replace(
@@ -156,24 +179,31 @@ async function collectFiles(directory, prefix = '') {
 }
 
 async function main() {
-  const { UMBRA_ARCHIVE_KEY } = await ensureLocalSecrets();
-  const files = await collectFiles(SOURCE_DIR);
+  const secrets = await ensureLocalSecrets();
+  const files = profile.entryFileOnly
+    ? {
+        'index.html': {
+          contentType: 'text/html; charset=utf-8',
+          data: Buffer.from(prepareHtml(await fs.readFile(path.join(profile.sourceDir, 'index.html'), 'utf8'))).toString('base64'),
+        },
+      }
+    : await collectFiles(profile.sourceDir);
   if (!files['index.html']) throw new Error('The archive is missing index.html');
 
   const payload = gzipSync(Buffer.from(JSON.stringify({ version: 1, files })));
-  const key = Buffer.from(UMBRA_ARCHIVE_KEY, 'hex');
-  if (key.length !== 32) throw new Error('UMBRA_ARCHIVE_KEY must be 32 random bytes encoded as hex');
+  const key = Buffer.from(secrets[profile.archiveKey], 'hex');
+  if (key.length !== 32) throw new Error(`${profile.archiveKey} must be 32 random bytes encoded as hex`);
 
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  await fs.mkdir(path.dirname(OUTPUT_FILE), { recursive: true });
-  await fs.writeFile(OUTPUT_FILE, Buffer.concat([MAGIC, iv, authTag, encrypted]));
+  await fs.mkdir(path.dirname(profile.outputFile), { recursive: true });
+  await fs.writeFile(profile.outputFile, Buffer.concat([MAGIC, iv, authTag, encrypted]));
 
   const megabytes = (encrypted.byteLength / 1024 / 1024).toFixed(2);
-  process.stdout.write(`Encrypted ${Object.keys(files).length} archive files (${megabytes} MB).\n`);
+  process.stdout.write(`Encrypted ${Object.keys(files).length} ${PROFILE_NAME} archive files (${megabytes} MB).\n`);
 }
 
 await main();

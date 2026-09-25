@@ -3,6 +3,8 @@ export interface UmbraOrigin {
   y: number;
 }
 
+export type UmbraArchive = 'umbra' | 'birthday';
+
 export interface UmbraBodySnapshot {
   id: string;
   label: string;
@@ -15,6 +17,7 @@ export interface UmbraBodySnapshot {
 }
 
 export interface UmbraSceneSnapshot {
+  archive: UmbraArchive;
   trigger: UmbraOrigin;
   sink: UmbraOrigin;
   viewport: {

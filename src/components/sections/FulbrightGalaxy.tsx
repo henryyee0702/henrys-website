@@ -343,6 +343,21 @@ interface MachineState {
   activeArticle: EpisodeNode | null;
 }
 
+const SECRET_ORBITS = {
+  '1': {
+    archive: 'umbra',
+    targetId: '1',
+    targetLabel: '太陽',
+    displayDurationSeconds: 7.02,
+  },
+  '4': {
+    archive: 'birthday',
+    targetId: '4',
+    targetLabel: '地球',
+    displayDurationSeconds: 9.25,
+  },
+} as const;
+
 export const FulbrightGalaxy: React.FC = () => {
   const [machineState, setMachineState] = useState<MachineState>({
     phase: 'idle',
@@ -367,10 +382,13 @@ export const FulbrightGalaxy: React.FC = () => {
   const sceneRef = useRef<HTMLDivElement>(null);
   const cameraWrapperRef = useRef<HTMLDivElement>(null);
   const scrollPanelRef = useRef<HTMLDivElement>(null);
-  const mobileSunTargetRef = useRef<HTMLDivElement>(null);
+  const mobileSecretTargetRef = useRef<HTMLDivElement>(null);
   const pauseBeforeUmbraRef = useRef(false);
 
   const panelWidth = compactLayout ? windowWidth : Math.round(windowWidth * 2 / 3);
+  const activeSecretOrbit = machineState.activeArticle
+    ? SECRET_ORBITS[machineState.activeArticle.id as keyof typeof SECRET_ORBITS] ?? null
+    : null;
 
   const physicalZ = useRef({ ...INITIAL_PHYSICAL_Z });
   const physicalScale = useRef({ ...INITIAL_PHYSICAL_SCALE });
@@ -652,16 +670,18 @@ export const FulbrightGalaxy: React.FC = () => {
   };
 
   const getUmbraTargetRect = useCallback(() => {
+    if (!activeSecretOrbit) return null;
     if (compactLayout) {
-      return mobileSunTargetRef.current?.getBoundingClientRect() || null;
+      return mobileSecretTargetRef.current?.getBoundingClientRect() || null;
     }
-    return planetRefs.current['1']?.body?.getBoundingClientRect() || null;
-  }, [compactLayout]);
+    return planetRefs.current[activeSecretOrbit.targetId]?.body?.getBoundingClientRect() || null;
+  }, [activeSecretOrbit, compactLayout]);
 
   const launchUmbra = useCallback((origin: UmbraOrigin) => {
+    if (!activeSecretOrbit) return;
     const sectionRect = sectionRef.current?.getBoundingClientRect();
-    const sunRect = planetRefs.current['1']?.body?.getBoundingClientRect();
-    if (!sectionRect || !sunRect || sectionRect.width <= 0 || sectionRect.height <= 0) return;
+    const sinkRect = planetRefs.current[activeSecretOrbit.targetId]?.body?.getBoundingClientRect();
+    if (!sectionRect || !sinkRect || sectionRect.width <= 0 || sectionRect.height <= 0) return;
 
     const viewportWidth = Math.max(1, window.innerWidth);
     const viewportHeight = Math.max(1, window.innerHeight);
@@ -689,18 +709,19 @@ export const FulbrightGalaxy: React.FC = () => {
     pauseBeforeUmbraRef.current = isUserPaused;
     setIsUserPaused(true);
     setUmbraScene({
+      archive: activeSecretOrbit.archive,
       trigger: {
         x: normalizeX(triggerClientX),
         y: normalizeY(triggerClientY),
       },
       sink: {
-        x: normalizeX(sunRect.left + sunRect.width / 2),
-        y: normalizeY(sunRect.top + sunRect.height / 2),
+        x: normalizeX(sinkRect.left + sinkRect.width / 2),
+        y: normalizeY(sinkRect.top + sinkRect.height / 2),
       },
       viewport: { width: viewportWidth, height: viewportHeight },
       bodies,
     });
-  }, [isUserPaused]);
+  }, [activeSecretOrbit, isUserPaused]);
 
   const dismissUmbra = useCallback(() => {
     setUmbraScene(null);
@@ -825,9 +846,11 @@ export const FulbrightGalaxy: React.FC = () => {
 
       <SecretDividerHandle
         visible={Boolean(machineState.activeArticle) && machineState.phase === 'idle' && !umbraActive}
-        enabled={Boolean(machineState.activeArticle?.isSun)}
+        enabled={Boolean(activeSecretOrbit)}
         panelLeft={windowWidth - panelWidth}
         isMobile={compactLayout}
+        displayDurationSeconds={activeSecretOrbit?.displayDurationSeconds ?? 7.02}
+        targetLabel={activeSecretOrbit?.targetLabel ?? '天體'}
         sectionRef={sectionRef}
         getTargetRect={getUmbraTargetRect}
         onIntent={handleUmbraIntent}
@@ -852,8 +875,8 @@ export const FulbrightGalaxy: React.FC = () => {
             <header className="flex justify-between items-center px-8 py-8 md:px-12 md:py-10 border-b border-white/[0.05] shrink-0">
               <div className="flex items-center gap-4">
                 <div
-                  ref={machineState.activeArticle.isSun ? mobileSunTargetRef : undefined}
-                  data-umbra-target={machineState.activeArticle.isSun ? 'sun' : undefined}
+                  ref={activeSecretOrbit ? mobileSecretTargetRef : undefined}
+                  data-umbra-target={activeSecretOrbit?.archive}
                   className={`w-3 h-3 rounded-full bg-gradient-to-br ${machineState.activeArticle.color}`}
                   style={{ boxShadow: `0 0 12px ${machineState.activeArticle.glow}` }}
                 />

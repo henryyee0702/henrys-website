@@ -1,0 +1,13 @@
+.git
+.astro
+.artifacts
+.agents
+node_modules
+dist
+test-results
+references
+design-qa.md
+skills-lock.json
+.env*
+*.log
+.DS_Store
